@@ -1,0 +1,97 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+    scroll-behavior: smooth;
+  }
+  body {
+    font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    @apply bg-stone-50 text-stone-800 antialiased;
+  }
+  * {
+    @apply box-border;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-white rounded-2xl shadow-sm border border-stone-200 p-4;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl font-semibold transition-all duration-200 active:scale-[0.97] disabled:opacity-50 disabled:pointer-events-none;
+  }
+  .btn-primary {
+    @apply bg-green-700 text-white hover:bg-green-800 px-5 py-3;
+  }
+  .btn-secondary {
+    @apply bg-stone-100 text-stone-700 hover:bg-stone-200 px-5 py-3;
+  }
+  .btn-outline {
+    @apply border border-stone-300 text-stone-700 hover:bg-stone-50 px-5 py-3;
+  }
+  .badge {
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold;
+  }
+  .badge-live { @apply bg-green-100 text-green-800; }
+  .badge-verified { @apply bg-blue-100 text-blue-800; }
+  .badge-ai { @apply bg-purple-100 text-purple-800; }
+  .badge-estimate { @apply bg-amber-100 text-amber-800; }
+  .badge-demo { @apply bg-orange-100 text-orange-800; }
+  .badge-low { @apply bg-red-100 text-red-700; }
+  .badge-info { @apply bg-sky-100 text-sky-700; }
+
+  .touch-target {
+    min-height: 48px;
+    min-width: 48px;
+  }
+  .pb-nav {
+    padding-bottom: 80px;
+  }
+  .input-field {
+    @apply w-full rounded-lg border border-stone-300 px-3 py-2.5 text-sm focus:outline-none focus:border-green-600;
+  }
+}
+
+@keyframes pulse-ring {
+  0% { transform: scale(0.8); opacity: 0.8; }
+  100% { transform: scale(2); opacity: 0; }
+}
+.pulse-ring::before {
+  content: '';
+  @apply absolute inset-0 rounded-full bg-green-400;
+  animation: pulse-ring 1.5s ease-out infinite;
+}
+
+@keyframes spin-slow {
+  to { transform: rotate(360deg); }
+}
+.animate-spin-slow {
+  animation: spin-slow 1s linear infinite;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out;
+}
+
+@keyframes slide-up {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+.animate-slide-up {
+  animation: slide-up 0.3s ease-out;
+}
+
+@keyframes fade-overlay {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.animate-fade-overlay {
+  animation: fade-overlay 0.2s ease-out;
+}
