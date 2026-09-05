@@ -125,7 +125,7 @@ export function MarketPage() {
 
       {!loading && !error && result && result.source.status === 'unavailable' && !demoMode && (
         <ErrorState
-          message="Live market data is temporarily unavailable. The official AGMARKNET API requires a registered API key."
+          message="Live market data is currently unavailable. The AGMARKNET/data.gov.in API requires a registered API key (VITE_DATAGOV_API_KEY) to fetch real mandi prices. You can still browse sample data by enabling Demo Mode in Settings."
           onRetry={loadData}
           officialLink={OFFICIAL_SOURCES.AGMARKNET.url}
         />

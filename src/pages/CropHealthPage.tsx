@@ -46,6 +46,16 @@ export function CropHealthPage() {
       );
       setAnalysis(result);
       setSheetState(result.result ? (result.result.confidence === 'Low' ? 'low-confidence' : 'success') : 'error');
+      if (result.result) {
+        saveCropAnalysis({
+          crop: result.result.crop,
+          problem: result.result.possibleProblem,
+          confidence: result.result.confidence,
+          symptoms: result.result.visibleSymptoms.join('; '),
+          causes: result.result.possibleCauses.join('; '),
+          recommendations: result.result.whatToDoNow.join('; '),
+        }).catch(() => {});
+      }
     }, 1200);
   };
 

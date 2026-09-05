@@ -2,7 +2,7 @@ import { useApp } from '@/context/AppContext';
 import { PageWrapper } from '@/components/PageWrapper';
 import { DashboardCard } from '@/components/DashboardCard';
 import { DemoBanner } from '@/components/DataBadges';
-import { Mic, Sprout, Camera, TrendingUp, Handshake, CloudSun, ShieldAlert, Settings, Leaf, CloudRain, Sun, ArrowRight } from 'lucide-react';
+import { Mic, Sprout, Camera, TrendingUp, Handshake, CloudSun, ShieldAlert, Settings, Leaf, CloudRain, Sun, ArrowRight, CalendarClock, History } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { WeatherData } from '@/types';
@@ -91,6 +91,8 @@ export function DashboardPage() {
         <DashboardCard to="/sell-crop" icon={<Handshake className="w-6 h-6" />} title={t('sellCrop')} description="Find verified selling pathways" actionLabel={t('findBuyers')} accent="orange" />
         <DashboardCard to="/weather" icon={<CloudSun className="w-6 h-6" />} title={t('weather')} description="Forecast and weather warnings" actionLabel={t('viewWeather')} accent="blue" />
         <DashboardCard to="/safety" icon={<ShieldAlert className="w-6 h-6" />} title={t('safety')} description="Official weather and disaster alerts" actionLabel="Check Safety" accent="red" />
+        <DashboardCard to="/farm-tasks" icon={<CalendarClock className="w-6 h-6" />} title="Farm Tasks" description="Create reminders for irrigation, fertilizer, harvest" actionLabel="Manage Tasks" accent="green" />
+        <DashboardCard to="/history" icon={<History className="w-6 h-6" />} title="Analysis History" description="View previous crop health analyses" actionLabel="View History" accent="teal" />
       </div>
 
       {/* Secondary features link */}
