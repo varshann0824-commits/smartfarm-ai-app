@@ -40,7 +40,7 @@ export async function fetchMarketPrices(
       throw new Error('No API key configured');
     }
 
-    const resource = '9c98b620-ab08-4e58-9b9d-4e8a901c2f5a';
+    const resource = '9ef84268-d588-465a-a308-a864a43d0070';
     const fields = 'commodity,market,state,district,min_price,max_price,modal_price,arrivals,arrival_date';
 
     // Build filter query params — data.gov.in supports filters[field]=value
