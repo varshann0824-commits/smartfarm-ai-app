@@ -6,6 +6,11 @@ export interface NotificationSettings {
 const STORAGE_KEY = 'smartfarm_notifications';
 const SOUND_ENABLED_KEY = 'smartfarm_sound_enabled';
 
+let activeOscillator: OscillatorNode | null = null;
+let activeGain: GainNode | null = null;
+let activeAudioContext: AudioContext | null = null;
+let sirenInterval: ReturnType<typeof setInterval> | null = null;
+
 export function getNotificationSettings(): NotificationSettings {
   const notifications = localStorage.getItem(STORAGE_KEY) !== 'false';
   const alertSound = localStorage.getItem(SOUND_ENABLED_KEY) !== 'false';
@@ -45,12 +50,11 @@ export function showNotification(title: string, body: string): boolean {
 }
 
 export function playAlertSound(): void {
-  const settings = getNotificationSettings();
-  if (!settings.alertSound) return;
   if (typeof window === 'undefined') return;
 
   try {
-    const audioContext = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+    const audioContext = getAudioContext();
+    if (!audioContext) return;
     const oscillator = audioContext.createOscillator();
     const gainNode = audioContext.createGain();
 
@@ -77,7 +81,8 @@ export function playEmergencySiren(): void {
   if (typeof window === 'undefined') return;
 
   try {
-    const audioContext = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+    const audioContext = getAudioContext();
+    if (!audioContext) return;
     const duration = 4;
     const now = audioContext.currentTime;
 
@@ -87,7 +92,6 @@ export function playEmergencySiren(): void {
     gainNode.connect(audioContext.destination);
 
     oscillator.type = 'sawtooth';
-    // Siren: alternating high-low sweep
     for (let t = 0; t < duration; t += 0.5) {
       oscillator.frequency.setValueAtTime(800, now + t);
       oscillator.frequency.linearRampToValueAtTime(1200, now + t + 0.25);
@@ -102,5 +106,76 @@ export function playEmergencySiren(): void {
     oscillator.stop(now + duration);
   } catch {
     // Audio not available
+  }
+}
+
+export function startEmergencySiren(): void {
+  if (typeof window === 'undefined') return;
+  stopEmergencySiren();
+
+  try {
+    const audioContext = getAudioContext();
+    if (!audioContext) return;
+
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+
+    oscillator.type = 'sawtooth';
+    const now = audioContext.currentTime;
+    oscillator.frequency.setValueAtTime(800, now);
+    gainNode.gain.setValueAtTime(0.4, now);
+    oscillator.start(now);
+
+    activeOscillator = oscillator;
+    activeGain = gainNode;
+    activeAudioContext = audioContext;
+
+    let toggle = false;
+    sirenInterval = setInterval(() => {
+      if (!activeOscillator || !activeAudioContext) return;
+      toggle = !toggle;
+      activeOscillator.frequency.linearRampToValueAtTime(
+        toggle ? 1200 : 800,
+        activeAudioContext.currentTime + 0.25,
+      );
+    }, 500);
+  } catch {
+    // Audio not available
+  }
+}
+
+export function stopEmergencySiren(): void {
+  if (sirenInterval) {
+    clearInterval(sirenInterval);
+    sirenInterval = null;
+  }
+  if (activeOscillator) {
+    try {
+      const ctx = activeAudioContext;
+      if (ctx && activeGain) {
+        activeGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
+      }
+      activeOscillator.stop(ctx ? ctx.currentTime + 0.1 : 0);
+    } catch {
+      // ignore
+    }
+    activeOscillator = null;
+  }
+  activeGain = null;
+  activeAudioContext = null;
+}
+
+function getAudioContext(): AudioContext | null {
+  try {
+    const Ctor = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    const ctx = new Ctor();
+    if (ctx.state === 'suspended') {
+      ctx.resume();
+    }
+    return ctx;
+  } catch {
+    return null;
   }
 }
