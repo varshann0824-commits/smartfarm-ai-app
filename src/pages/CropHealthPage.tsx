@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ChangeEvent } from 'react';
 import { PageWrapper } from '@/components/PageWrapper';
 import { DataBadge, SourceInfo } from '@/components/DataBadges';
 import { AnalysisSheet, type AnalysisState } from '@/components/AnalysisSheet';
@@ -8,7 +8,7 @@ import { getAgricultureKnowledge } from '@/services/agricultureKnowledgeService'
 import { voiceService } from '@/services/voiceService';
 import { CROP_NAMES, getCropInfo } from '@/services/cropDatabase';
 import { saveCropAnalysis } from '@/services/analysisHistoryService';
-import { Camera, Upload, Mic, Type, Send, Volume2, Square, AlertTriangle, RotateCcw, Building } from 'lucide-react';
+import { Camera, Upload, Mic, Type, Send, Volume2, Square, RotateCcw, Building, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 type InputMode = 'text' | 'voice' | 'image';
@@ -30,6 +30,9 @@ export function CropHealthPage() {
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [photoName, setPhotoName] = useState<string | null>(null);
+  const [photoError, setPhotoError] = useState<string | null>(null);
 
   const langMap: Record<string, string> = {
     en: 'en-IN', te: 'te-IN', hi: 'hi-IN', ta: 'ta-IN', kn: 'kn-IN', ml: 'ml-IN', mr: 'mr-IN',
@@ -57,6 +60,41 @@ export function CropHealthPage() {
         }).catch(() => {});
       }
     }, 1200);
+  };
+
+  const clearSelectedPhoto = () => {
+    setPhotoPreview(null);
+    setPhotoName(null);
+    setPhotoError(null);
+  };
+
+  const handlePhotoChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      clearSelectedPhoto();
+      setPhotoError('Please choose an image file.');
+      return;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      clearSelectedPhoto();
+      setPhotoError('Please choose an image smaller than 8 MB.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setPhotoPreview(typeof reader.result === 'string' ? reader.result : null);
+      setPhotoName(file.name);
+      setPhotoError(null);
+    };
+    reader.onerror = () => {
+      clearSelectedPhoto();
+      setPhotoError('The photo could not be read. Please try another image.');
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleRetry = () => {
@@ -110,17 +148,33 @@ export function CropHealthPage() {
       {/* Image Input */}
       {mode === 'image' && (
         <div className="card mb-4 text-center">
-          <div className="border-2 border-dashed border-stone-300 rounded-xl p-6">
-            <Upload className="w-12 h-12 text-stone-300 mx-auto mb-3" />
-            <p className="text-stone-600 font-medium mb-2">Upload a photo of your crop</p>
-            <p className="text-sm text-stone-400 mb-4">Take a clear photo of the affected leaves, stems, or plant</p>
-            <label className="btn btn-primary touch-target cursor-pointer inline-flex">
-              <Camera className="w-5 h-5" /> Choose Photo
-              <input type="file" accept="image/*" capture="environment" className="hidden" onChange={() => {}} />
-            </label>
-          </div>
+          {photoPreview ? (
+            <div className="rounded-xl border border-stone-200 overflow-hidden text-left">
+              <img src={photoPreview} alt="Selected crop" className="w-full max-h-64 object-cover bg-stone-100" />
+              <div className="flex items-center justify-between gap-3 p-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-stone-700 truncate">{photoName}</p>
+                  <p className="text-xs text-stone-500">Photo selected on this device</p>
+                </div>
+                <button onClick={clearSelectedPhoto} className="btn btn-outline text-sm px-3 py-2 flex-shrink-0" aria-label="Remove selected photo">
+                  <X className="w-4 h-4" /> Remove
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="border-2 border-dashed border-stone-300 rounded-xl p-6">
+              <Upload className="w-12 h-12 text-stone-300 mx-auto mb-3" />
+              <p className="text-stone-600 font-medium mb-2">Upload a photo of your crop</p>
+              <p className="text-sm text-stone-400 mb-4">Take a clear photo of the affected leaves, stems, or plant</p>
+              <label className="btn btn-primary touch-target cursor-pointer inline-flex">
+                <Camera className="w-5 h-5" /> Choose Photo
+                <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handlePhotoChange} />
+              </label>
+            </div>
+          )}
+          {photoError && <p className="text-sm text-red-700 mt-3">{photoError}</p>}
           <p className="text-xs text-stone-400 mt-3">
-            After uploading, please also describe the symptoms below for better analysis.
+            Your photo remains on this device and is not uploaded. Also describe the symptoms below so the current rule-based analysis can use them.
           </p>
         </div>
       )}
@@ -201,7 +255,7 @@ export function CropHealthPage() {
             analysis={analysis}
             onSpeak={handleSpeak}
             isSpeaking={isSpeaking}
-            onAnalyzeAnother={() => { setSymptoms(''); closeSheet(); }}
+            onAnalyzeAnother={() => { setSymptoms(''); clearSelectedPhoto(); closeSheet(); }}
             onContactExpert={() => navigate('/support')}
           />
         )}

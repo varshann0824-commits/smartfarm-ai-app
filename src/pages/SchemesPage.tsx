@@ -2,9 +2,9 @@ import { useState, useEffect, useCallback } from 'react';
 import { PageWrapper } from '@/components/PageWrapper';
 import { DataBadge, SourceInfo, LoadingSpinner, ErrorState } from '@/components/DataBadges';
 import { useApp } from '@/context/AppContext';
-import { fetchSchemes, ELIGIBILITY_LABELS, type SchemeResult } from '@/services/schemeService';
+import { fetchSchemes, searchSchemes, ELIGIBILITY_LABELS, type SchemeResult, type SchemeSearchResult } from '@/services/schemeService';
 import { OFFICIAL_SOURCES } from '@/services/sourceMetadata';
-import { ExternalLink, Landmark, Filter, CheckCircle2 } from 'lucide-react';
+import { ExternalLink, Landmark, Filter, CheckCircle2, Search, X } from 'lucide-react';
 
 export function SchemesPage() {
   const { t, location } = useApp();
@@ -13,6 +13,9 @@ export function SchemesPage() {
   const [error, setError] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [levelFilter, setLevelFilter] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResult, setSearchResult] = useState<SchemeSearchResult | null>(null);
+  const [isSearching, setIsSearching] = useState(false);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -31,10 +34,22 @@ export function SchemesPage() {
     loadData();
   }, [loadData]);
 
-  const filteredSchemes = result?.schemes.filter(s => {
+  const handleSearch = async () => {
+    const query = searchQuery.trim();
+    if (!query) {
+      setSearchResult(null);
+      return;
+    }
+    setIsSearching(true);
+    setSearchResult(await searchSchemes(query));
+    setIsSearching(false);
+  };
+
+  const displayedSchemes = searchResult?.schemes ?? result?.schemes ?? [];
+  const filteredSchemes = displayedSchemes.filter(s => {
     if (levelFilter && s.level !== levelFilter) return false;
     return true;
-  }) || [];
+  });
 
   return (
     <PageWrapper title={`\u{1F3DB}\uFE0F ${t('schemes')}`}>
@@ -43,8 +58,33 @@ export function SchemesPage() {
         <button onClick={() => setShowFilters(s => !s)} className="btn btn-outline text-sm px-3 py-2">
           <Filter className="w-4 h-4" /> Filter
         </button>
-        {result && <DataBadge status="verified" />}
+        {result && <DataBadge status={searchResult?.isLive ? 'live' : 'verified'} />}
       </div>
+
+      <form onSubmit={(event) => { event.preventDefault(); void handleSearch(); }} className="card mb-4">
+        <label htmlFor="scheme-search" className="text-sm font-medium text-stone-600 block mb-2">Search schemes</label>
+        <div className="flex gap-2">
+          <input
+            id="scheme-search"
+            type="search"
+            value={searchQuery}
+            onChange={event => setSearchQuery(event.target.value)}
+            placeholder="e.g., insurance, credit, soil"
+            className="input-field flex-1"
+          />
+          <button type="submit" disabled={isSearching} className="btn btn-primary text-sm px-4 touch-target">
+            <Search className="w-4 h-4" /> {isSearching ? 'Searching...' : 'Search'}
+          </button>
+        </div>
+        {searchResult && (
+          <div className="flex items-center justify-between gap-2 mt-2 text-xs text-stone-500">
+            <span>{searchResult.isLive ? 'Showing live myScheme search results.' : 'Showing matching schemes from the available official-link catalogue.'}</span>
+            <button type="button" onClick={() => { setSearchQuery(''); setSearchResult(null); }} className="inline-flex items-center gap-1 text-green-700 font-medium">
+              <X className="w-3.5 h-3.5" /> Clear
+            </button>
+          </div>
+        )}
+      </form>
 
       {showFilters && (
         <div className="card mb-4 animate-fade-in">
@@ -120,7 +160,7 @@ export function SchemesPage() {
             })}
           </div>
 
-          {result.schemes.length > 0 && (
+          {displayedSchemes.length > 0 && (
             <div className="mt-4">
               <SourceInfo source={result.source} />
             </div>
@@ -129,7 +169,7 @@ export function SchemesPage() {
           {filteredSchemes.length === 0 && (
             <div className="card text-center text-stone-500 py-6">
               <CheckCircle2 className="w-8 h-8 mx-auto mb-2 text-stone-300" />
-              No schemes match this filter. Try selecting "All Levels".
+              No schemes match this search or filter. Try a different term or select "All Levels".
             </div>
           )}
         </>

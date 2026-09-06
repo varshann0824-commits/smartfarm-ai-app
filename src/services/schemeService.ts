@@ -86,6 +86,8 @@ export function getKnownSchemes(): GovernmentScheme[] {
 export function fetchSchemes(_state?: string, _crop?: string): SchemeResult {
   // The myScheme portal has an API but it may not be accessible without proper keys.
   // We provide known schemes with official source links and clearly mark them.
+  void _state;
+  void _crop;
   try {
     const schemes = getKnownSchemes();
     return {
@@ -118,27 +120,123 @@ export function fetchSchemes(_state?: string, _crop?: string): SchemeResult {
   }
 }
 
-interface MySchemeSearchResult {
+export interface MySchemeSearchResult {
   available: boolean;
   schemes: GovernmentScheme[];
 }
 
 export async function searchMySchemeAPI(query: string): Promise<MySchemeSearchResult> {
-  // The myScheme API can be tried, but it may require network access.
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10_000);
+
   try {
     const res = await fetch(
       `https://www.myscheme.gov.in/api/v1/search?query=${encodeURIComponent(query)}`,
-      { headers: { Accept: 'application/json' } },
+      { headers: { Accept: 'application/json' }, signal: controller.signal },
     );
     if (!res.ok) throw new Error('myScheme API unavailable');
-    const data = await res.json();
-    if (!data.schemes || data.schemes.length === 0) {
+    const data: unknown = await res.json();
+    const schemes = getApiRecords(data).map(toGovernmentScheme).filter((scheme): scheme is GovernmentScheme => scheme !== null);
+    if (schemes.length === 0) {
       return { available: false, schemes: [] };
     }
-    return { available: true, schemes: [] };
+    return { available: true, schemes };
   } catch {
     return { available: false, schemes: [] };
+  } finally {
+    clearTimeout(timeoutId);
   }
+}
+
+export interface SchemeSearchResult {
+  schemes: GovernmentScheme[];
+  isLive: boolean;
+}
+
+export async function searchSchemes(query: string): Promise<SchemeSearchResult> {
+  const normalizedQuery = query.trim();
+  const localMatches = filterKnownSchemes(normalizedQuery);
+  if (!normalizedQuery) return { schemes: localMatches, isLive: false };
+
+  const liveResult = await searchMySchemeAPI(normalizedQuery);
+  if (liveResult.available) {
+    return { schemes: liveResult.schemes, isLive: true };
+  }
+
+  // The public endpoint may be unavailable to browsers. Searching the known,
+  // official-link catalogue keeps the search usable without mislabelling it as live data.
+  return { schemes: localMatches, isLive: false };
+}
+
+function filterKnownSchemes(query: string): GovernmentScheme[] {
+  const normalizedQuery = query.toLowerCase();
+  return getKnownSchemes().filter((scheme) => {
+    if (!normalizedQuery) return true;
+    return [scheme.name, scheme.eligibility, scheme.benefits, scheme.source, ...scheme.documents]
+      .join(' ')
+      .toLowerCase()
+      .includes(normalizedQuery);
+  });
+}
+
+function getApiRecords(data: unknown): Record<string, unknown>[] {
+  if (!isRecord(data)) return [];
+  const candidates = [data.schemes, data.results, data.data];
+  const records = candidates.find(Array.isArray);
+  return records ? records.filter(isRecord) : [];
+}
+
+function toGovernmentScheme(record: Record<string, unknown>): GovernmentScheme | null {
+  const name = readRecordText(record, ['name', 'scheme_name', 'schemeName', 'title']);
+  if (!name) return null;
+
+  const description = readRecordText(record, ['benefits', 'description', 'details', 'summary']) || 'See the official portal for complete benefits and eligibility.';
+  const rawLevel = readRecordText(record, ['level', 'government_level', 'category']).toLowerCase();
+  const level: GovernmentScheme['level'] = rawLevel.includes('state') ? 'State' : rawLevel.includes('district') ? 'District' : 'Central';
+  const applicationLink = toSafeApplicationLink(readRecordText(record, ['application_link', 'apply_url', 'url', 'link']));
+
+  return {
+    name,
+    level,
+    eligibility: readRecordText(record, ['eligibility', 'eligible_for', 'eligibility_criteria']) || 'Check eligibility on the official portal.',
+    benefits: description,
+    documents: readDocuments(record.documents),
+    applicationMethod: readRecordText(record, ['application_method', 'how_to_apply', 'apply_process']) || 'Open the official portal for application instructions.',
+    applicationLink,
+    deadline: readRecordText(record, ['deadline', 'last_date', 'application_deadline']) || null,
+    status: readRecordText(record, ['status', 'scheme_status']) || null,
+    source: OFFICIAL_SOURCES.MYSCHEME.name,
+    lastChecked: formatLastUpdated(new Date()),
+    eligibilityLabel: 'info-required',
+  };
+}
+
+function readDocuments(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map(String).map((item) => item.trim()).filter(Boolean);
+  if (typeof value === 'string') return value.split(',').map((item) => item.trim()).filter(Boolean);
+  return [];
+}
+
+function readRecordText(record: Record<string, unknown>, fields: string[]): string {
+  for (const field of fields) {
+    const value = record[field];
+    if (typeof value === 'string' && value.trim()) return value.trim();
+  }
+  return '';
+}
+
+function toSafeApplicationLink(value: string): string {
+  if (!value) return OFFICIAL_SOURCES.MYSCHEME.url;
+  try {
+    const url = new URL(value, OFFICIAL_SOURCES.MYSCHEME.url);
+    return url.protocol === 'https:' ? url.toString() : OFFICIAL_SOURCES.MYSCHEME.url;
+  } catch {
+    return OFFICIAL_SOURCES.MYSCHEME.url;
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
 }
 
 export const ELIGIBILITY_LABELS: Record<GovernmentScheme['eligibilityLabel'], { text: string; emoji: string; color: string }> = {

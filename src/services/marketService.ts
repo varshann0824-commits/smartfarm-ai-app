@@ -5,7 +5,11 @@ export interface MarketResult {
   prices: MarketPrice[];
   source: SourceMetadata;
   isDemo: boolean;
+  message?: string;
 }
+
+const DATA_GOV_RESOURCE = '9ef84268-d588-465a-a308-a864a43d0070';
+const REQUEST_TIMEOUT_MS = 15_000;
 
 // Common Indian crops including spices for manual search
 export const COMMON_CROPS = [
@@ -34,13 +38,15 @@ export async function fetchMarketPrices(
   crop?: string,
   market?: string,
 ): Promise<MarketResult> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
   try {
     const apiKey = import.meta.env.VITE_DATAGOV_API_KEY;
     if (!apiKey) {
-      throw new Error('No API key configured');
+      throw new Error('No data.gov.in API key is configured.');
     }
 
-    const resource = '9ef84268-d588-465a-a308-a864a43d0070';
     const fields = 'commodity,market,state,district,min_price,max_price,modal_price,arrivals,arrival_date';
 
     // Build filter query params — data.gov.in supports filters[field]=value
@@ -51,26 +57,31 @@ export async function fetchMarketPrices(
       'fields': fields,
     });
 
-    if (state) params.append('filters[state]', state);
-    if (crop) params.append('filters[commodity]', crop);
-    if (market) params.append('filters[market]', market);
+    if (state?.trim()) params.append('filters[state]', state.trim());
+    if (crop?.trim()) params.append('filters[commodity]', crop.trim());
+    if (market?.trim()) params.append('filters[market]', market.trim());
 
-    const url = `https://api.data.gov.in/resource/${resource}?${params.toString()}`;
+    const url = `https://api.data.gov.in/resource/${DATA_GOV_RESOURCE}?${params.toString()}`;
 
-    const res = await fetch(url);
-    if (!res.ok) throw new Error('Market API failed');
-    const data = await res.json();
+    const res = await fetch(url, { signal: controller.signal });
+    if (!res.ok) {
+      throw new Error(`The market service responded with ${res.status}.`);
+    }
+    const data: unknown = await res.json();
+    if (!isMarketResponse(data)) {
+      throw new Error(getMarketApiError(data) || 'The market service returned an unexpected response.');
+    }
 
-    const prices: MarketPrice[] = (data.records || []).map((r: Record<string, string>) => ({
-      commodity: r.commodity,
-      market: r.market,
-      state: r.state,
-      district: r.district,
-      minPrice: parsePrice(r.min_price),
-      maxPrice: parsePrice(r.max_price),
-      modalPrice: parsePrice(r.modal_price),
-      arrivals: r.arrivals || null,
-      date: r.arrival_date || '',
+    const prices: MarketPrice[] = data.records.filter(isRecord).map((record) => ({
+      commodity: readText(record, 'commodity'),
+      market: readText(record, 'market'),
+      state: readText(record, 'state'),
+      district: readText(record, 'district'),
+      minPrice: parsePrice(readText(record, 'min_price')),
+      maxPrice: parsePrice(readText(record, 'max_price')),
+      modalPrice: parsePrice(readText(record, 'modal_price')),
+      arrivals: readText(record, 'arrivals') || null,
+      date: readText(record, 'arrival_date'),
     }));
 
     return {
@@ -86,21 +97,52 @@ export async function fetchMarketPrices(
       },
       isDemo: false,
     };
-  } catch {
-    return {
-      prices: [],
-      source: {
-        sourceName: OFFICIAL_SOURCES.AGMARKNET.name,
-        sourceUrl: OFFICIAL_SOURCES.AGMARKNET.url,
-        sourceType: 'OFFICIAL',
-        isLive: false,
-        isVerified: true,
-        lastUpdated: formatLastUpdated(new Date()),
-        status: 'unavailable',
-      },
-      isDemo: false,
-    };
+  } catch (error) {
+    const message = error instanceof Error && error.name === 'AbortError'
+      ? 'The market request timed out. Please try again.'
+      : error instanceof Error
+        ? error.message
+        : 'Live market data is temporarily unavailable.';
+    return unavailableMarketResult(message);
+  } finally {
+    clearTimeout(timeoutId);
   }
+}
+
+function unavailableMarketResult(message: string): MarketResult {
+  return {
+    prices: [],
+    source: {
+      sourceName: OFFICIAL_SOURCES.AGMARKNET.name,
+      sourceUrl: OFFICIAL_SOURCES.AGMARKNET.url,
+      sourceType: 'OFFICIAL',
+      isLive: false,
+      isVerified: true,
+      lastUpdated: formatLastUpdated(new Date()),
+      status: 'unavailable',
+    },
+    isDemo: false,
+    message,
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function isMarketResponse(value: unknown): value is { records: unknown[] } {
+  return isRecord(value) && Array.isArray(value.records);
+}
+
+function getMarketApiError(value: unknown): string | null {
+  if (!isRecord(value)) return null;
+  const error = value.error ?? value.message;
+  return typeof error === 'string' && error.trim() ? error.trim() : null;
+}
+
+function readText(record: Record<string, unknown>, field: string): string {
+  const value = record[field];
+  return value === null || value === undefined ? '' : String(value).trim();
 }
 
 function parsePrice(val: string): number | null {

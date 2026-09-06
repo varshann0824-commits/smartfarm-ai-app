@@ -46,6 +46,9 @@ export async function fetchWeather(lat: number, lon: number): Promise<WeatherRes
     // Generate basic warnings from severe weather codes
     const warnings: WeatherWarning[] = [];
     const todayCode = data.daily?.weather_code?.[0] ?? 0;
+    const todayMax = data.daily?.temperature_2m_max?.[0] ?? null;
+    const todayMin = data.daily?.temperature_2m_min?.[0] ?? null;
+    const currentWindSpeed = data.current?.wind_speed_10m ?? null;
     if ([95, 96, 99].includes(todayCode)) {
       warnings.push({
         id: 'thunderstorm-today',
@@ -68,6 +71,42 @@ export async function fetchWeather(lat: number, lon: number): Promise<WeatherRes
         validUntil: data.daily?.time?.[0] || '',
         source: 'Open-Meteo (FALLBACK)',
         actions: ['Ensure proper drainage in fields', 'Delay harvest if possible', 'Protect stored produce'],
+      });
+    }
+    if (todayMax !== null && todayMax >= 40) {
+      warnings.push({
+        id: 'heat-stress-today',
+        level: 'ORANGE',
+        title: 'High heat stress risk today',
+        area: 'Your location',
+        issueTime: formatLastUpdated(now),
+        validUntil: data.daily?.time?.[0] || '',
+        source: 'Open-Meteo (FALLBACK)',
+        actions: ['Irrigate during cooler hours where appropriate', 'Provide water and shade for livestock', 'Avoid field work during peak afternoon heat'],
+      });
+    }
+    if (todayMin !== null && todayMin <= 5) {
+      warnings.push({
+        id: 'cold-stress-today',
+        level: 'YELLOW',
+        title: 'Low temperature risk today',
+        area: 'Your location',
+        issueTime: formatLastUpdated(now),
+        validUntil: data.daily?.time?.[0] || '',
+        source: 'Open-Meteo (FALLBACK)',
+        actions: ['Protect young plants where practical', 'Avoid irrigation during the coldest hours', 'Monitor livestock for cold stress'],
+      });
+    }
+    if (currentWindSpeed !== null && currentWindSpeed >= 45) {
+      warnings.push({
+        id: 'strong-wind-now',
+        level: 'YELLOW',
+        title: 'Strong winds at your location',
+        area: 'Your location',
+        issueTime: formatLastUpdated(now),
+        validUntil: data.daily?.time?.[0] || '',
+        source: 'Open-Meteo (FALLBACK)',
+        actions: ['Avoid spraying while winds are strong', 'Secure loose covers and farm equipment', 'Keep clear of damaged trees and power lines'],
       });
     }
 

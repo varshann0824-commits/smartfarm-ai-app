@@ -21,6 +21,7 @@ export function MarketPage() {
   const loadData = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setForecastResult(null);
     if (demoMode) {
       const demo = getDemoMarketPrices();
       setResult(demo);
@@ -125,7 +126,7 @@ export function MarketPage() {
 
       {!loading && !error && result && result.source.status === 'unavailable' && !demoMode && (
         <ErrorState
-          message="Live market data is currently unavailable. The AGMARKNET/data.gov.in API requires a registered API key (VITE_DATAGOV_API_KEY) to fetch real mandi prices. You can still browse sample data by enabling Demo Mode in Settings."
+          message={result.message || 'Live market data is currently unavailable. The AGMARKNET/data.gov.in API requires a registered API key (VITE_DATAGOV_API_KEY) to fetch real mandi prices. You can still browse sample data by enabling Demo Mode in Settings.'}
           onRetry={loadData}
           officialLink={OFFICIAL_SOURCES.AGMARKNET.url}
         />
@@ -341,7 +342,6 @@ function NearbyMandiComparison({ prices }: { prices: MarketPrice[] }) {
 
   // Sort by modal price descending
   const sorted = mandis.sort((a, b) => (b.modalPrice ?? 0) - (a.modalPrice ?? 0));
-  const highest = sorted[0];
   const nearest = mandis[0]; // first in original order
 
   return (

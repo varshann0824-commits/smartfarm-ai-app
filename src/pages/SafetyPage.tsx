@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { PageWrapper } from '@/components/PageWrapper';
-import { LoadingSpinner } from '@/components/DataBadges';
+import { DataBadge, LoadingSpinner, SourceInfo } from '@/components/DataBadges';
 import { useApp } from '@/context/AppContext';
 import { checkDisasterAlerts, WARNING_LEVELS, type DisasterAlertResult } from '@/services/disasterAlertService';
 import { getNotificationSettings, playAlertSound, startEmergencySiren, stopEmergencySiren } from '@/services/notificationService';
@@ -21,7 +21,20 @@ export function SafetyPage() {
       const r = await checkDisasterAlerts(location.latitude, location.longitude);
       setResult(r);
     } else {
-      setResult({ warnings: [], available: false, officialSourceUrl: OFFICIAL_SOURCES.IMD.url });
+      setResult({
+        warnings: [],
+        available: false,
+        officialSourceUrl: OFFICIAL_SOURCES.IMD.url,
+        source: {
+          sourceName: 'Location required',
+          sourceType: 'FALLBACK',
+          isLive: false,
+          isVerified: false,
+          lastUpdated: '',
+          status: 'unavailable',
+        },
+        fallback: false,
+      });
     }
     setLoading(false);
   }, [location.latitude, location.longitude]);
@@ -52,10 +65,9 @@ export function SafetyPage() {
 
   const monitoredTypes = [
     { emoji: '🌧', name: 'Heavy Rain' },
-    { emoji: '🌀', name: 'Cyclone' },
     { emoji: '⚡', name: 'Thunderstorm' },
-    { emoji: '🔥', name: 'Heatwave' },
-    { emoji: '❄', name: 'Cold Wave' },
+    { emoji: '🔥', name: 'Heat Stress' },
+    { emoji: '❄', name: 'Low Temperature' },
     { emoji: '💨', name: 'Strong Winds' },
   ];
 
@@ -170,6 +182,18 @@ export function SafetyPage() {
 
       {!loading && result && (
         <>
+          {result.fallback && (
+            <div className="card mb-4 bg-amber-50 border-amber-200">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="w-5 h-5 text-amber-700 flex-shrink-0 mt-0.5" />
+                <div className="text-sm text-amber-900">
+                  <p className="font-medium mb-1"><DataBadge status="unavailable" className="mr-2" />Official IMD alerts are not connected.</p>
+                  <p>Any warnings below are live Open-Meteo fallback conditions. Confirm urgent decisions with the IMD official warning service.</p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {result.warnings.length > 0 ? (
             <div className="space-y-3 mb-4">
               {result.warnings.map((w, i) => {
@@ -214,13 +238,16 @@ export function SafetyPage() {
               <ShieldAlert className="w-12 h-12 text-green-500 mx-auto mb-3" />
               <h3 className="font-semibold text-stone-800 mb-1">No Active Warnings</h3>
               <p className="text-sm text-stone-600 mb-3">
-                No official weather warnings are currently available through the fallback source. For official IMD warnings, please check the IMD website directly.
+                {result.available
+                  ? 'No active severe-weather conditions were detected in the current fallback data. This is not an official IMD all-clear.'
+                  : 'Live fallback weather could not be checked. For official IMD warnings, please check the IMD website directly.'}
               </p>
               <a href={result.officialSourceUrl} target="_blank" rel="noopener noreferrer" className="btn btn-primary text-sm px-4 py-2">
                 <ExternalLink className="w-4 h-4" /> Check IMD Official Warnings
               </a>
             </div>
           )}
+          {result.available && <SourceInfo source={result.source} />}
         </>
       )}
 

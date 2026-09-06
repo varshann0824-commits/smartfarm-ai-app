@@ -1,19 +1,26 @@
 import type { WeatherWarning } from '@/types';
+import { fetchWeather } from './weatherService';
+import type { SourceMetadata } from '@/types';
 
 export interface DisasterAlertResult {
   warnings: WeatherWarning[];
   available: boolean;
   officialSourceUrl: string;
+  source: SourceMetadata;
+  fallback: boolean;
 }
 
-export async function checkDisasterAlerts(_lat: number, _lon: number): Promise<DisasterAlertResult> {
-  // Official IMD warnings require their API which needs registration.
-  // We return an empty list and show the official source link.
-  // We NEVER create arbitrary "RED ALERT" from AI guesses.
+export async function checkDisasterAlerts(lat: number, lon: number): Promise<DisasterAlertResult> {
+  // Official IMD warnings require registration. Reuse the clearly labelled
+  // Open-Meteo fallback so the Safety page can surface actual severe-weather
+  // conditions without presenting them as official IMD alerts.
+  const weather = await fetchWeather(lat, lon);
   return {
-    warnings: [],
-    available: false,
+    warnings: weather.warnings,
+    available: weather.source.status === 'available',
     officialSourceUrl: 'https://mausam.imd.gov.in/',
+    source: weather.source,
+    fallback: weather.fallback,
   };
 }
 
