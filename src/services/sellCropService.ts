@@ -13,6 +13,22 @@ export interface SellCropRoute {
 export function getSellCropRoutes(): SellCropRoute[] {
   return [
     {
+      routeType: 'itc',
+      title: 'ITC Agri-Business Procurement',
+      description:
+        'ITC\'s Agri-Business Division procures crops like wheat, soybean, chilli, and other commodities through its network. ITC e-Choupal provides farmers with information and market access. Check the official ITC portal for current procurement programs and contact details.',
+      steps: [
+        'Visit the official ITC Agri-Business portal',
+        'Check if your crop is currently being procured',
+        'Find the nearest ITC procurement center or e-Choupal',
+        'Contact the official ITC helpline for current procurement details',
+        'Register your produce for procurement',
+      ],
+      officialLink: 'https://www.itcportal.com/businesses/agri-business/agri-business.aspx',
+      officialLinkLabel: 'ITC Agri-Business Portal',
+      source: 'ITC Limited (itcportal.com)',
+    },
+    {
       routeType: 'enam',
       title: 'e-NAM Seller Route',
       description:

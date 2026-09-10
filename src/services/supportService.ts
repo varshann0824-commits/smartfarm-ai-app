@@ -12,6 +12,9 @@ export interface SupportResult {
 export function getSupportInfo(_state?: string, _district?: string): SupportResult {
   // We do NOT invent support center names, addresses, or phone numbers.
   // We provide official portals where farmers can find their nearest center.
+  // _state/_district are reserved for future location-aware lookups.
+  void _state;
+  void _district;
   const now = new Date();
   return {
     centers: [],

@@ -17,7 +17,6 @@ export function detectLanguage(text: string): 'te' | 'hi' | 'ta' | 'kn' | 'ml' |
   for (const { lang, pattern } of LANGUAGE_RANGES) {
     if (pattern.test(text)) {
       if (lang === 'hi' || lang === 'mr') {
-        const lower = text.toLowerCase();
         const isMarathi = DEVANAGARI_MR_WORDS.some(w => text.includes(w));
         const isHindi = DEVANAGARI_HI_WORDS.some(w => text.includes(w));
         if (isMarathi && !isHindi) return 'mr';

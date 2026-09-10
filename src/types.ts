@@ -38,6 +38,7 @@ export interface WeatherData {
   rainfall: number | null;
   rainProbability: number | null;
   windSpeed: number | null;
+  windDirection: string | null;
   condition: string;
   source: 'IMD' | 'Open-Meteo' | 'DEMO';
   lastUpdated: string;
@@ -125,6 +126,28 @@ export interface CropRecommendation {
   aiForecast: string | null;
   mainRisks: string[];
   commonDiseases: string[];
+  scoreBreakdown?: ScoreFactor[];
+  missingInputs?: string[];
+}
+
+export interface ScoreFactor {
+  factor: string;
+  score: number;
+  maxScore: number;
+  reason: string;
+}
+
+export interface RecommendationInput {
+  state: string;
+  district: string;
+  season: 'kharif' | 'rabi' | 'zaid' | 'auto' | '';
+  waterAvailability: 'low' | 'moderate' | 'high' | 'rainfed' | 'irrigated' | 'limited' | '';
+  budget: 'low' | 'medium' | 'high' | '';
+  soilType: string | null;
+  soilPh: number | null;
+  cropPreference: string | null;
+  previousCrop: string | null;
+  hasSoilData: boolean;
 }
 
 export interface FarmEconomicsResult {

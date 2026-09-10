@@ -3,17 +3,25 @@ import { PageWrapper } from '@/components/PageWrapper';
 import { DataBadge } from '@/components/DataBadges';
 import { useApp } from '@/context/AppContext';
 import { getSoilTestingLabs, saveSoilTest, loadSoilTest, clearSoilTest, hasSoilTest } from '@/services/soilService';
+import { checkMapsAvailability, getGoogleMapsSearchUrl, searchSoilTestingLocations, type SoilTestLocation } from '@/services/mapsService';
 import type { SoilTestData } from '@/types';
-import { FlaskConical, ExternalLink, Save, Trash2, CheckCircle2 } from 'lucide-react';
+import { FlaskConical, ExternalLink, Save, Trash2, CheckCircle2, MapPin, AlertTriangle, Loader2 } from 'lucide-react';
 
 export function SoilTestPage() {
-  const { t } = useApp();
+  const { t, location } = useApp();
   const labs = getSoilTestingLabs();
   const existingData = loadSoilTest();
   const [saved, setSaved] = useState(hasSoilTest());
   const [data, setData] = useState<SoilTestData>(existingData || {
     ph: null, nitrogen: '', phosphorus: '', potassium: '', organicCarbon: '', micronutrients: '', soilType: '',
   });
+
+  // Google Maps state
+  const mapsAvailability = checkMapsAvailability();
+  const [mapLocations, setMapLocations] = useState<SoilTestLocation[]>([]);
+  const [mapLoading, setMapLoading] = useState(false);
+  const [mapError, setMapError] = useState<string | null>(null);
+  const [mapSearched, setMapSearched] = useState(false);
 
   const handleSave = () => {
     saveSoilTest(data);
@@ -24,6 +32,23 @@ export function SoilTestPage() {
     clearSoilTest();
     setSaved(false);
     setData({ ph: null, nitrogen: '', phosphorus: '', potassium: '', organicCarbon: '', micronutrients: '', soilType: '' });
+  };
+
+  const handleMapSearch = async () => {
+    if (!location.latitude || !location.longitude) {
+      setMapError('Location is needed to search for soil testing labs. Please allow location access in Settings.');
+      setMapSearched(true);
+      return;
+    }
+    setMapLoading(true);
+    setMapError(null);
+    setMapSearched(true);
+    const result = await searchSoilTestingLocations(location.latitude, location.longitude);
+    setMapLocations(result.locations);
+    if (!result.available) {
+      setMapError(result.message);
+    }
+    setMapLoading(false);
   };
 
   return (
@@ -139,12 +164,98 @@ export function SoilTestPage() {
         </div>
       </div>
 
-      {/* Find Soil Testing Labs */}
+      {/* Google Maps - Find Soil Testing Labs Near You */}
       <div className="card mb-4">
         <h3 className="font-bold text-stone-800 mb-2 flex items-center gap-2">
-          <FlaskConical className="w-5 h-5 text-amber-600" /> Need a Soil Test?
+          <MapPin className="w-5 h-5 text-green-600" /> Find Soil Testing Labs Near You
         </h3>
-        <p className="text-sm text-stone-600 mb-3">Find verified soil testing laboratories and centers near you:</p>
+
+        {!mapsAvailability.available ? (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium text-amber-800">Google Maps is not configured</p>
+                <p className="text-sm text-amber-700 mt-1">{mapsAvailability.message}</p>
+                <p className="text-xs text-amber-600 mt-2">
+                  You can still use the official portals below to find soil testing laboratories, or open Google Maps directly to search.
+                </p>
+                {location.latitude && location.longitude && (
+                  <a
+                    href={getGoogleMapsSearchUrl(location.latitude, location.longitude)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn btn-outline text-sm px-3 py-2 mt-3 inline-flex"
+                  >
+                    <ExternalLink className="w-4 h-4" /> Open Google Maps Search
+                  </a>
+                )}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div>
+            <p className="text-sm text-stone-600 mb-3">
+              Search for verified soil testing laboratories near your location using Google Maps.
+            </p>
+            <button
+              onClick={handleMapSearch}
+              disabled={mapLoading}
+              className="btn btn-primary touch-target w-full text-sm"
+            >
+              {mapLoading ? (
+                <><Loader2 className="w-4 h-4 animate-spin" /> Searching...</>
+              ) : (
+                <><MapPin className="w-4 h-4" /> Search Near My Location</>
+              )}
+            </button>
+
+            {mapError && (
+              <div className="mt-3 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                <p className="text-sm text-amber-800">{mapError}</p>
+              </div>
+            )}
+
+            {mapSearched && !mapLoading && mapLocations.length > 0 && (
+              <div className="mt-3 space-y-2">
+                {mapLocations.map((loc, i) => (
+                  <div key={i} className="bg-stone-50 rounded-lg p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="font-medium text-stone-800 text-sm">{loc.name}</p>
+                        <p className="text-xs text-stone-600 mt-0.5">{loc.address}</p>
+                        <p className="text-[10px] text-stone-400 mt-1">Source: {loc.source}</p>
+                      </div>
+                      <a
+                        href={`https://www.google.com/maps?q=${loc.latitude},${loc.longitude}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="btn btn-outline text-xs px-2.5 py-1.5 flex-shrink-0"
+                      >
+                        <ExternalLink className="w-3 h-3" /> View
+                      </a>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {mapSearched && !mapLoading && mapLocations.length === 0 && !mapError && (
+              <div className="mt-3 bg-stone-50 rounded-lg p-3 text-center">
+                <p className="text-sm text-stone-600">No soil testing locations found near you.</p>
+                <p className="text-xs text-stone-500 mt-1">Try the official portals below or open Google Maps to search manually.</p>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Find Soil Testing Labs - Official Portals */}
+      <div className="card mb-4">
+        <h3 className="font-bold text-stone-800 mb-2 flex items-center gap-2">
+          <FlaskConical className="w-5 h-5 text-amber-600" /> Official Soil Testing Portals
+        </h3>
+        <p className="text-sm text-stone-600 mb-3">Find verified soil testing laboratories and centers through official government portals:</p>
         <div className="space-y-2">
           {labs.map((lab, i) => (
             <div key={i} className="bg-stone-50 rounded-lg p-3">

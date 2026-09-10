@@ -8,7 +8,6 @@ import { OFFICIAL_SOURCES, formatLastUpdated } from './sourceMetadata';
 import { fetchMarketPrices } from './marketService';
 import { fetchWeather } from './weatherService';
 import { getKnownSchemes } from './schemeService';
-import { getSupportInfo } from './supportService';
 import { getSellCropRoutes } from './sellCropService';
 import { analyzeCropHealth } from './cropHealthService';
 import { getCropRecommendations } from './cropRecommendationService';
@@ -159,7 +158,18 @@ async function routeCropProfit(
 async function routeCropRecommendation(
   _q: string, _e: ExtractedEntities, ctx: RADEContext, lang: LanguageCode, tpl: ResponseTpl,
 ): Promise<AIResponse> {
-  const recs = getCropRecommendations(ctx.location?.state || '', 'auto', 'medium', 'medium', false);
+  const recs = getCropRecommendations({
+    state: ctx.location?.state || '',
+    district: ctx.location?.district || '',
+    season: 'auto',
+    waterAvailability: 'moderate',
+    budget: 'medium',
+    soilType: null,
+    soilPh: null,
+    cropPreference: _e.crop,
+    previousCrop: null,
+    hasSoilData: false,
+  });
   const top3 = recs.recommendations.slice(0, 3);
   if (top3.length === 0) {
     return {
@@ -173,17 +183,6 @@ async function routeCropRecommendation(
     text: (lang === 'te' ? 'సిఫారసు చేసిన పంటలు:\n\n' : lang === 'hi' ? 'अनुशंसित फसलें:\n\n' : 'Recommended crops:\n\n') + lines,
     confidence: 'Medium', dataStatus: 'ai', sources: [],
     actions: [{ label: tpl.actions.viewDetails, link: '/crop-recommendation' }],
-  };
-}
-
-async function routeSupport(
-  _q: string, _e: ExtractedEntities, ctx: RADEContext, lang: LanguageCode, tpl: ResponseTpl,
-): Promise<AIResponse> {
-  const info = getSupportInfo(ctx.location?.state, ctx.location?.district);
-  return {
-    text: (lang === 'te' ? 'వ్యవసాయ సహాయం:\n' : lang === 'hi' ? 'कृषि सहायता:\n' : 'Agricultural support:\n') + `Kisan Call Center: ${info.officialHelpline.phone}\nKisan SARATHI: ${info.kisanSarathiUrl}`,
-    confidence: 'High', dataStatus: 'verified', sources: [info.source],
-    actions: [{ label: tpl.actions.viewDetails, link: '/support' }, { label: tpl.actions.openSource, link: info.kisanSarathiUrl }],
   };
 }
 

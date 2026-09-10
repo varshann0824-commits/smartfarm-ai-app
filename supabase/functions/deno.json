@@ -1,0 +1,10 @@
+{
+  "lint": {
+    "rules": {
+      "exclude": ["no-explicit-any"]
+    }
+  },
+  "fmt": {
+    "singleQuote": true
+  }
+}

@@ -8,7 +8,6 @@ export interface MarketResult {
   message?: string;
 }
 
-const DATA_GOV_RESOURCE = '9ef84268-d588-465a-a308-a864a43d0070';
 const REQUEST_TIMEOUT_MS = 15_000;
 
 // Common Indian crops including spices for manual search
@@ -31,8 +30,10 @@ export const COMMON_STATES = [
   'Nagaland', 'Mizoram', 'Arunachal Pradesh', 'Sikkim',
 ];
 
-// The data.gov.in AGMARKNET API requires a registered API key stored in env.
-// Without a valid key we cannot fetch live data and show "unavailable" honestly.
+// The data.gov.in AGMARKNET API requires a registered API key.
+// We proxy through a Supabase Edge Function so the key stays server-side.
+// If the Edge Function is not deployed or the key is not configured,
+// we show "unavailable" honestly.
 export async function fetchMarketPrices(
   state?: string,
   crop?: string,
@@ -42,28 +43,29 @@ export async function fetchMarketPrices(
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
   try {
-    const apiKey = import.meta.env.VITE_DATAGOV_API_KEY;
-    if (!apiKey) {
-      throw new Error('No data.gov.in API key is configured.');
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    if (!supabaseUrl) {
+      throw new Error('Supabase is not configured. The market service requires a Supabase Edge Function to keep the API key server-side.');
     }
 
-    const fields = 'commodity,market,state,district,min_price,max_price,modal_price,arrivals,arrival_date';
+    // Call the Supabase Edge Function
+    const baseUrl = supabaseUrl.replace(/\/rest\/v1\/?$/, '');
+    const params = new URLSearchParams();
+    if (state?.trim()) params.append('state', state.trim());
+    if (crop?.trim()) params.append('crop', crop.trim());
+    if (market?.trim()) params.append('market', market.trim());
+    const queryString = params.toString();
+    const url = `${baseUrl}/functions/v1/market-prices${queryString ? `?${queryString}` : ''}`;
 
-    // Build filter query params — data.gov.in supports filters[field]=value
-    const params = new URLSearchParams({
-      'api-key': apiKey,
-      'format': 'json',
-      'limit': '1000',
-      'fields': fields,
+    const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+    const res = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        // Supabase Edge Functions require the anon key even for public
+        // functions when JWT verification is enabled (the default).
+        ...(anonKey ? { apikey: anonKey } : {}),
+      },
     });
-
-    if (state?.trim()) params.append('filters[state]', state.trim());
-    if (crop?.trim()) params.append('filters[commodity]', crop.trim());
-    if (market?.trim()) params.append('filters[market]', market.trim());
-
-    const url = `https://api.data.gov.in/resource/${DATA_GOV_RESOURCE}?${params.toString()}`;
-
-    const res = await fetch(url, { signal: controller.signal });
     if (!res.ok) {
       throw new Error(`The market service responded with ${res.status}.`);
     }

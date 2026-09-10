@@ -127,7 +127,6 @@ export function TalkPage() {
 
     try {
       const radeResult = await processAIQueryWithRADE(query, ctx);
-      const tpl = getResponseTemplate(radeResult.detectedLanguage);
       const assistantMsg: ChatMessage = {
         role: 'assistant',
         text: radeResult.response.text,

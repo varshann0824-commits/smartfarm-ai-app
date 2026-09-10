@@ -42,6 +42,7 @@ export function SellCropPage() {
 
   const routeIcons = [
     <Handshake className="w-5 h-5" />,
+    <Handshake className="w-5 h-5" />,
     <Store className="w-5 h-5" />,
     <Package className="w-5 h-5" />,
     <FileText className="w-5 h-5" />,

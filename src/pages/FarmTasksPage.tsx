@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
 import { PageWrapper } from '@/components/PageWrapper';
-import { useApp } from '@/context/AppContext';
 import { fetchFarmTasks, createFarmTask, updateTaskStatus, deleteFarmTask, getTaskTypeLabel, type FarmTask, type TaskType } from '@/services/farmTaskService';
 import { Plus, Trash2, Check, Circle, Calendar, Clock, Repeat, AlertCircle } from 'lucide-react';
 
@@ -17,7 +16,6 @@ const TASK_ICONS: Record<string, string> = {
 };
 
 export function FarmTasksPage() {
-  const { t } = useApp();
   const [tasks, setTasks] = useState<FarmTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

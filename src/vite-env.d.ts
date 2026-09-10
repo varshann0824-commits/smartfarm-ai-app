@@ -25,7 +25,7 @@ interface SpeechRecognition extends EventTarget {
   onstart: ((this: SpeechRecognition, ev: Event) => unknown) | null;
 }
 
-declare var SpeechRecognition: {
+declare const SpeechRecognition: {
   new (): SpeechRecognition;
   prototype: SpeechRecognition;
 };

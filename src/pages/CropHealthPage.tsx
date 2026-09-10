@@ -3,7 +3,7 @@ import { PageWrapper } from '@/components/PageWrapper';
 import { DataBadge, SourceInfo } from '@/components/DataBadges';
 import { AnalysisSheet, type AnalysisState } from '@/components/AnalysisSheet';
 import { useApp } from '@/context/AppContext';
-import { analyzeCropHealth, type CropHealthAnalysis } from '@/services/cropHealthService';
+import { analyzeCropHealth, analyzeCropHealthWithAI, type CropHealthAnalysis } from '@/services/cropHealthService';
 import { getAgricultureKnowledge } from '@/services/agricultureKnowledgeService';
 import { voiceService } from '@/services/voiceService';
 import { CROP_NAMES, getCropInfo } from '@/services/cropDatabase';
@@ -39,18 +39,22 @@ export function CropHealthPage() {
   };
 
   const handleAnalyze = () => {
-    if (!symptoms.trim()) return;
+    if (!symptoms.trim() || sheetState === 'analyzing') return; // prevents duplicate submissions
     setSheetOpen(true);
     setSheetState('analyzing');
     setAnalysis(null);
-    setTimeout(() => {
-      const result = analyzeCropHealth(
-        crop, symptoms, growthStage, recentRainfall, irrigation, visibleInsects, recentFertilizer,
+    void runAnalysis();
+  };
+
+  const runAnalysis = async () => {
+    try {
+      const result = await analyzeCropHealthWithAI(
+        crop, symptoms, growthStage, recentRainfall, irrigation, visibleInsects, recentFertilizer, language,
       );
       setAnalysis(result);
       setSheetState(result.result ? (result.result.confidence === 'Low' ? 'low-confidence' : 'success') : 'error');
       if (result.result) {
-        saveCropAnalysis({
+        void saveCropAnalysis({
           crop: result.result.crop,
           problem: result.result.possibleProblem,
           confidence: result.result.confidence,
@@ -59,7 +63,15 @@ export function CropHealthPage() {
           recommendations: result.result.whatToDoNow.join('; '),
         }).catch(() => {});
       }
-    }, 1200);
+    } catch {
+      // Safety net — the service already falls back internally, but never
+      // allow the page to be left in a broken state.
+      const result = analyzeCropHealth(
+        crop, symptoms, growthStage, recentRainfall, irrigation, visibleInsects, recentFertilizer,
+      );
+      setAnalysis(result);
+      setSheetState(result.result ? (result.result.confidence === 'Low' ? 'low-confidence' : 'success') : 'error');
+    }
   };
 
   const clearSelectedPhoto = () => {
@@ -98,15 +110,10 @@ export function CropHealthPage() {
   };
 
   const handleRetry = () => {
+    if (sheetState === 'analyzing') return; // prevents duplicate submissions
     setSheetState('analyzing');
     setAnalysis(null);
-    setTimeout(() => {
-      const result = analyzeCropHealth(
-        crop, symptoms, growthStage, recentRainfall, irrigation, visibleInsects, recentFertilizer,
-      );
-      setAnalysis(result);
-      setSheetState(result.result ? (result.result.confidence === 'Low' ? 'low-confidence' : 'success') : 'error');
-    }, 1200);
+    void runAnalysis();
   };
 
   const handleVoiceInput = () => {
@@ -174,7 +181,7 @@ export function CropHealthPage() {
           )}
           {photoError && <p className="text-sm text-red-700 mt-3">{photoError}</p>}
           <p className="text-xs text-stone-400 mt-3">
-            Your photo remains on this device and is not uploaded. Also describe the symptoms below so the current rule-based analysis can use them.
+            Photo input is a preview only and is not analyzed yet. Please describe the symptoms below so the analysis can use them.
           </p>
         </div>
       )}
@@ -248,6 +255,7 @@ export function CropHealthPage() {
         state={sheetState}
         title="Crop Analysis Result"
         analyzingLabel="Analyzing your crop symptoms..."
+        errorLabel={analysis?.error || 'Unable to complete the analysis. Please check your connection and try again.'}
         onRetry={handleRetry}
       >
         {analysis?.result && (
@@ -310,7 +318,7 @@ function CropHealthResultDisplay({
         </div>
       </div>
 
-      {r.confidence === 'Low' && (
+      {(r.confidence === 'Low' || /severe/i.test(r.severity)) && (
         <div className="card bg-red-50 border-red-200 text-red-800 text-sm">
           ⚠ Please verify with a KVK/agriculture officer before taking major treatment decisions.
         </div>

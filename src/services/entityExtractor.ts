@@ -167,7 +167,7 @@ export function extractEntities(query: string): ExtractedEntities {
   const lower = query.toLowerCase().trim();
 
   let crop: string | null = null;
-  let variety: string | null = null;
+  const variety: string | null = null;
   let disease: string | null = null;
   let pest: string | null = null;
   let location: string | null = null;
@@ -176,7 +176,7 @@ export function extractEntities(query: string): ExtractedEntities {
   let soilType: string | null = null;
   let soilPh: string | null = null;
   let cropStage: string | null = null;
-  let market: string | null = null;
+  const market: string | null = null;
   let quantity: string | null = null;
   let date: string | null = null;
   let weatherCondition: string | null = null;
