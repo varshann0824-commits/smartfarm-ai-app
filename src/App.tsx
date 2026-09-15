@@ -1,5 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AppProvider, useApp } from '@/context/AppContext';
+import { IntroGate } from '@/components/intro/IntroGate';
+import { BackdropSwitcher } from '@/components/ui/PageBackdrop';
 import { BottomNav } from '@/components/BottomNav';
 import { WelcomePage } from '@/pages/WelcomePage';
 import { OnboardingPage } from '@/pages/OnboardingPage';
@@ -48,6 +50,7 @@ function AppRoutes() {
         <Route path="/history" element={<HistoryPage />} />
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
+      <BackdropSwitcher />
       <BottomNav />
     </>
   );
@@ -57,7 +60,9 @@ export default function App() {
   return (
     <BrowserRouter>
       <AppProvider>
-        <AppRoutes />
+        <IntroGate>
+          <AppRoutes />
+        </IntroGate>
       </AppProvider>
     </BrowserRouter>
   );

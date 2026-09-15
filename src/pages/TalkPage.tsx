@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, Suspense, lazy } from 'react';
 import { PageWrapper } from '@/components/PageWrapper';
 import { DataBadge, SourceInfo } from '@/components/DataBadges';
 import { useApp } from '@/context/AppContext';
@@ -8,8 +8,14 @@ import { detectLanguage } from '@/services/languageDetector';
 import { formatIntentLabel, formatEntities, getResponseTemplate } from '@/services/multilingualResponses';
 import { freshnessBadge } from '@/services/freshnessValidator';
 import type { AIResponse } from '@/types';
-import { Mic, Send, Volume2, Square, Keyboard, ExternalLink, Sparkles, Tag } from 'lucide-react';
+import { Send, Volume2, Square, Keyboard, ExternalLink, Sparkles, Tag } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { VoiceOrb, type VoiceState } from '@/components/voice/VoiceOrb';
+
+// 3D AI core is lazily loaded — visualization only, zero impact on the
+// STT → LLM → TTS pipeline below.
+const VoiceCore3D = lazy(() => import('@/components/voice/VoiceCore3D'));
+
 
 interface ChatMessage {
   role: 'user' | 'assistant';
@@ -58,6 +64,16 @@ export function TalkPage() {
   const inputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const lastQueryRef = useRef<string>('');
+
+  // Visualization state derived from the existing pipeline flags only
+  const voiceState: VoiceState = isListening
+    ? 'listening'
+    : isProcessing
+      ? 'thinking'
+      : speakingIndex !== null
+        ? 'speaking'
+        : 'idle';
+
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -201,10 +217,10 @@ export function TalkPage() {
       )}
 
       {/* Messages */}
-      <div className="space-y-3 mb-4 max-h-[50vh] overflow-y-auto">
+      <div className="space-y-3 mb-4 max-h-[50vh] overflow-y-auto rounded-2xl border border-emerald-950/25 bg-emerald-950/80 p-3 shadow-hero backdrop-blur-sm">
         {messages.map((msg, i) => (
           <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-[88%] rounded-2xl p-3 ${msg.role === 'user' ? 'bg-green-700 text-white' : 'bg-white border border-stone-200'}`}>
+            <div className={`max-w-[88%] rounded-2xl p-3 ${msg.role === 'user' ? 'bg-green-700 text-white shadow-card' : 'bg-white/95 text-stone-900 border border-white/50 shadow-card'}`}>
               {/* Detected language indicator for user messages */}
               {msg.role === 'user' && msg.detectedLanguage && (
                 <div className="text-xs mb-1 opacity-80">
@@ -315,13 +331,13 @@ export function TalkPage() {
 
       {/* Suggested Questions */}
       {messages.length <= 1 && !recognizedText && (
-        <div className="mb-4">
-          <p className="text-sm text-stone-500 mb-2">
+        <div className="mb-4 rounded-2xl border border-white/25 bg-emerald-950/70 p-3 shadow-card backdrop-blur-sm">
+          <p className="text-sm font-medium text-white mb-2">
             {language === 'te' ? 'ప్రయత్నించండి:' : language === 'hi' ? 'पूछें:' : 'Try asking:'}
           </p>
           <div className="flex flex-wrap gap-2">
             {SUGGESTED_QUESTIONS.map((q, i) => (
-              <button key={i} onClick={() => { setInput(q); handleSubmit(q); }} className="btn btn-outline text-sm px-3 py-2">
+              <button key={i} onClick={() => { setInput(q); handleSubmit(q); }} className="btn btn-secondary text-sm px-3 py-2 shadow-card">
                 {q}
               </button>
             ))}
@@ -349,7 +365,7 @@ export function TalkPage() {
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
             placeholder={language === 'te' ? 'మీ ప్రశ్నను టైప్ చేయండి...' : language === 'hi' ? 'अपना प्रश्न टाइप करें...' : 'Type your question...'}
-            className="flex-1 rounded-xl border border-stone-300 px-4 py-3 text-sm focus:outline-none focus:border-green-600"
+            className="flex-1 rounded-xl border border-emerald-950/30 bg-white/95 px-4 py-3 text-base text-stone-900 placeholder:text-stone-500 shadow-card focus:outline-none focus:border-green-600 focus:ring-2 focus:ring-green-500/40"
             aria-label="Type your question"
           />
           <button onClick={() => handleSubmit()} disabled={!input.trim() || isProcessing} className="btn btn-primary touch-target px-4" aria-label={t('send')}>
@@ -359,28 +375,42 @@ export function TalkPage() {
       )}
 
       {/* Auto-speak toggle */}
-      <div className="flex items-center justify-center mb-2">
-        <label className="flex items-center gap-2 text-sm text-stone-600 cursor-pointer">
-          <input type="checkbox" checked={autoSpeak} onChange={(e) => setAutoSpeak(e.target.checked)} className="w-4 h-4 rounded" />
+      <div className="flex items-center justify-center mb-3">
+        <label className="inline-flex items-center gap-2 rounded-full border border-white/25 bg-emerald-950/70 px-3 py-2 text-sm font-medium text-white cursor-pointer shadow-card backdrop-blur-sm">
+          <input type="checkbox" checked={autoSpeak} onChange={(e) => setAutoSpeak(e.target.checked)} className="w-4 h-4 rounded accent-green-700" />
           {language === 'te' ? 'స్వయంచాలక వాయిస్' : language === 'hi' ? 'स्वतः आवाज़' : 'Auto voice response'}
         </label>
       </div>
 
-      {/* Microphone Button */}
+      {/* Microphone Button — premium AI interaction: layered photographic
+          halo + orb + lightweight 3D core. Visualization only; the
+          STT → LLM → TTS pipeline below is untouched. */}
       <div className="flex flex-col items-center gap-3">
-        <button
-          onClick={handleListen}
-          className={`relative w-24 h-24 rounded-full flex items-center justify-center transition-all ${
-            isListening ? 'bg-red-500' : 'bg-green-700 hover:bg-green-800'
-          } text-white shadow-lg ${isListening ? 'pulse-ring' : ''}`}
-          aria-label={t('tapToSpeak')}
-        >
-          <Mic className="w-10 h-10" />
-        </button>
-        <p className="font-semibold text-stone-700">
-          {isListening ? (language === 'te' ? 'వింటోంది...' : language === 'hi' ? 'सुन रहा हूं...' : 'Listening...') : isProcessing ? (language === 'te' ? 'ప్రాసెసింగ్...' : 'प्रोसेसिंग...') : t('tapToSpeak')}
-        </p>
-        <button onClick={() => setShowTextInput(s => !s)} className="btn btn-outline text-sm px-4 py-2">
+        <div className="relative w-full max-w-sm h-48 pointer-events-none select-none overflow-hidden rounded-3xl" aria-hidden="true">
+          <img
+            src={`${import.meta.env.BASE_URL}assets/cinematic/field.jpg`}
+            alt=""
+            draggable={false}
+            loading="lazy"
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+          <div className="absolute inset-0 bg-gradient-to-b from-emerald-950/55 via-emerald-950/25 to-[#f8faf8]" />
+          <div className="absolute inset-0">
+            <Suspense fallback={null}>
+              <VoiceCore3D state={voiceState} height={192} />
+            </Suspense>
+          </div>
+        </div>
+        <div className="relative z-10 -mt-14">
+          <VoiceOrb
+            state={voiceState}
+            size={116}
+            onClick={handleListen}
+            disabled={isProcessing}
+            title={t('tapToSpeak')}
+          />
+        </div>
+        <button onClick={() => setShowTextInput(s => !s)} className="btn btn-secondary text-sm px-4 py-2 shadow-card">
           <Keyboard className="w-4 h-4" /> {t('typeInstead')}
         </button>
       </div>

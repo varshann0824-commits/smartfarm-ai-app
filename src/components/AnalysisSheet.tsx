@@ -84,7 +84,7 @@ export function AnalysisSheet({
 function AnalyzingState({ label }: { label: string }) {
   return (
     <div className="flex flex-col items-center justify-center py-12 animate-fade-in">
-      <div className="w-10 h-10 border-3 border-green-200 border-t-green-700 rounded-full animate-spin-slow mb-4" />
+      <div className="w-10 h-10 border-4 border-green-200 border-t-green-700 rounded-full animate-spin-slow mb-4" />
       <p className="text-stone-600 font-medium">{label}</p>
       <div className="mt-6 space-y-2 w-full max-w-xs">
         <AnalyzingStep label="Reading input" delay={0} />

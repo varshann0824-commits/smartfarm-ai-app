@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Mic, MapPin, Bell, Volume2, Sprout, User, FlaskConical, ArrowRight, ArrowLeft } from 'lucide-react';
 import { useApp, LANGUAGES, type LanguageCode } from '@/context/AppContext';
 import { requestNotificationPermission } from '@/services/notificationService';
+import { BackdropScene } from '@/components/ui/PageBackdrop';
 
 export function OnboardingPage() {
   const navigate = useNavigate();
@@ -36,8 +37,14 @@ export function OnboardingPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-green-50 to-stone-50 px-6 py-8">
-      <div className="max-w-md mx-auto">
+    <div className="relative min-h-screen overflow-hidden bg-[#1c2b1f]">
+      {/* Cinematic farming photography behind the language picker — sharp,
+          with only a light veil so every step stays perfectly readable */}
+      <BackdropScene variant="blue-sky-field" veil={0.08} />
+      {/* Light veil keeps all steps perfectly readable */}
+      <div className="absolute inset-0 bg-white/40" aria-hidden="true" />
+
+      <div className="relative z-10 max-w-md mx-auto px-6 py-8">
         {/* Progress indicator */}
         <div className="flex items-center gap-2 mb-8">
           {[1, 2, 3].map((s) => (

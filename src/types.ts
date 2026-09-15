@@ -175,6 +175,8 @@ export interface LocationInfo {
   village: string | null;
   pincode: string | null;
   source: 'gps' | 'manual' | 'fallback';
+  /** Epoch ms when this location was detected. Used to detect stale data. */
+  detectedAt?: number;
 }
 
 export interface FarmerDetails {

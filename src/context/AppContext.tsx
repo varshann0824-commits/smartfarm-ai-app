@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
 import type { LocationInfo, FarmerDetails } from '@/types';
 import { loadLocation, saveLocation, getGPSLocation, reverseGeocode, defaultLocation } from '@/services/geocodingService';
 
@@ -382,9 +382,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return saved && LANGUAGES.some(l => l.code === saved) ? saved : 'en';
   });
 
-  const [location, setLocationState] = useState<LocationInfo>(() => loadLocation() || defaultLocation());
+  // Location is stale if older than 30 minutes — forces a fresh GPS read
+  // so the app never shows a location that differs from where the user
+  // actually is right now.
+  const LOCATION_STALE_MS = 30 * 60 * 1000;
+
+  const savedLocation = loadLocation();
+  // A saved GPS location is stale if it has no timestamp (old pre-GPS format)
+  // or is older than LOCATION_STALE_MS, which forces a fresh GPS read so the
+  // app never shows a location that differs from where the user actually is.
+  // A MANUAL location is an explicit choice made by the user, so it never
+  // expires and is never replaced by a background GPS read.
+  const isSavedStale = !savedLocation
+    ? true
+    : savedLocation.source === 'manual'
+      ? false
+      : !savedLocation.detectedAt
+        ? true
+        : Date.now() - savedLocation.detectedAt > LOCATION_STALE_MS;
+
+  const [location, setLocationState] = useState<LocationInfo>(() =>
+    isSavedStale ? defaultLocation() : savedLocation || defaultLocation()
+  );
   const [isDetectingLocation, setIsDetectingLocation] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
+
+  // Token that prevents a stale GPS result from overwriting a newer one
+  // when multiple detectLocation() calls are in flight concurrently.
+  const detectTokenRef = useRef(0);
 
   const [farmerDetails, setFarmerDetailsState] = useState<FarmerDetails | null>(() => {
     const raw = localStorage.getItem(FARMER_KEY);
@@ -405,17 +430,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [language]);
 
   const setLocation = useCallback((loc: LocationInfo) => {
-    setLocationState(loc);
-    saveLocation(loc);
+    // Any GPS detection still in flight must not overwrite the location the
+    // user just chose (GPS or manual), so invalidate its token first.
+    detectTokenRef.current += 1;
+    setIsDetectingLocation(false);
+    const withTimestamp: LocationInfo = { ...loc, detectedAt: Date.now() };
+    setLocationState(withTimestamp);
+    saveLocation(withTimestamp);
   }, []);
 
   const detectLocation = useCallback(async () => {
+    // Increment token so any in-flight detection from a previous call
+    // can recognise it is stale and discard its result.
+    const thisToken = ++detectTokenRef.current;
     setIsDetectingLocation(true);
     setLocationError(null);
     try {
       const gps = await getGPSLocation();
+      // A newer detectLocation() was started while we were waiting for
+      // GPS — discard this stale result so it cannot overwrite fresh data.
+      if (thisToken !== detectTokenRef.current) return;
       if (gps) {
         const geocoded = await reverseGeocode(gps.latitude, gps.longitude);
+        // Guard again after the async reverse-geocode.
+        if (thisToken !== detectTokenRef.current) return;
         const newLoc: LocationInfo = {
           latitude: gps.latitude,
           longitude: gps.longitude,
@@ -429,12 +467,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
         };
         setLocation(newLoc);
       } else {
-        setLocationError('Could not detect your location. Please allow location access or select manually.');
+        setLocationError('Unable to detect your current location. Please enable location permission or select your location manually.');
       }
     } catch {
-      setLocationError('Could not detect your location. Please try again or select manually.');
+      if (thisToken !== detectTokenRef.current) return;
+      setLocationError('Unable to detect your current location. Please enable location permission or select your location manually.');
     } finally {
-      setIsDetectingLocation(false);
+      if (thisToken === detectTokenRef.current) {
+        setIsDetectingLocation(false);
+      }
     }
   }, [setLocation]);
 
@@ -457,9 +498,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(ONBOARDED_KEY, String(done));
   }, []);
 
-  useEffect(() => {
+    useEffect(() => {
     document.documentElement.lang = language;
   }, [language]);
+
+  // Auto-detect location on first mount so the app always attempts a fresh
+  // GPS read rather than silently retaining a stale localStorage entry — but
+  // never when the user has explicitly saved a manual location, because that
+  // choice must survive reloads.
+  useEffect(() => {
+    if (loadLocation()?.source === 'manual') return;
+    detectLocation();
+  }, [detectLocation]);
 
   return (
     <AppContext.Provider value={{

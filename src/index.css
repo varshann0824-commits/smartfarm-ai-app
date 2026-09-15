@@ -9,28 +9,63 @@
   }
   body {
     font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-    @apply bg-stone-50 text-stone-800 antialiased;
+    @apply bg-stone-100 text-ink-900 antialiased;
+    background-image: radial-gradient(1200px 500px at 50% -160px, rgba(22, 163, 74, 0.07), transparent 70%);
+  }
+  h1, h2, h3, h4 {
+    font-family: 'Sora', 'Inter', system-ui, sans-serif;
   }
   * {
     @apply box-border;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 }
 
 @layer components {
   .card {
-    @apply bg-white rounded-2xl shadow-sm border border-stone-200 p-4;
+    @apply bg-white rounded-2xl shadow-card border border-stone-200/70 p-4;
+  }
+  .card-premium {
+    @apply bg-white rounded-2xl border border-stone-200/70 p-5 shadow-card transition-shadow duration-300 hover:shadow-lift;
+  }
+  .section-title {
+    @apply font-display font-semibold text-ink-800 tracking-tight;
+  }
+  .text-eyebrow {
+    @apply text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-400;
+  }
+  .gradient-text {
+    background: linear-gradient(120deg, #15803d 0%, #0f766e 55%, #b45309 115%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .skeleton {
+    @apply rounded-lg bg-stone-200/80;
+    background-image: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.55) 50%, rgba(255,255,255,0) 100%);
+    background-size: 200% 100%;
+    @apply animate-shimmer;
+  }
+  .glass-header {
+    @apply bg-white/85 backdrop-blur-md border-b border-stone-200/70;
   }
   .btn {
     @apply inline-flex items-center justify-center gap-2 rounded-xl font-semibold transition-all duration-200 active:scale-[0.97] disabled:opacity-50 disabled:pointer-events-none;
   }
   .btn-primary {
-    @apply bg-green-700 text-white hover:bg-green-800 px-5 py-3;
+    @apply bg-green-700 text-white hover:bg-green-800 px-5 py-3 shadow-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-600 focus-visible:ring-offset-2;
   }
   .btn-secondary {
-    @apply bg-stone-100 text-stone-700 hover:bg-stone-200 px-5 py-3;
+    @apply bg-stone-100 text-stone-800 hover:bg-stone-200 px-5 py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-600 focus-visible:ring-offset-2;
   }
   .btn-outline {
-    @apply border border-stone-300 text-stone-700 hover:bg-stone-50 px-5 py-3;
+    @apply border border-stone-300 bg-white text-stone-800 hover:bg-stone-50 px-5 py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-600 focus-visible:ring-offset-2;
   }
   .badge {
     @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold;
@@ -47,11 +82,22 @@
     min-height: 48px;
     min-width: 48px;
   }
+  a:focus-visible,
+  button:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible {
+    outline: 2px solid #15803d;
+    outline-offset: 2px;
+  }
+  ::selection {
+    background: rgba(21, 128, 61, 0.18);
+  }
   .pb-nav {
-    padding-bottom: 80px;
+    padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px));
   }
   .input-field {
-    @apply w-full rounded-lg border border-stone-300 px-3 py-2.5 text-sm focus:outline-none focus:border-green-600;
+    @apply w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-base text-stone-900 placeholder:text-stone-400 focus:outline-none focus:border-green-600 focus:ring-2 focus:ring-green-600/25 sm:text-sm;
   }
 }
 
@@ -95,3 +141,51 @@
 .animate-fade-overlay {
   animation: fade-overlay 0.2s ease-out;
 }
+
+/* ------------------------------------------------------------------ */
+/* Ambient page backdrop animations (PageBackdrop). GPU-friendly       */
+/* transform/opacity only. The global prefers-reduced-motion override  */
+/* at the top of this file disables all of these automatically.        */
+/* ------------------------------------------------------------------ */
+
+@keyframes bkd-drift {
+  0% { transform: translateX(-14%); }
+  100% { transform: translateX(114%); }
+}
+@keyframes bkd-firefly {
+  0% { transform: translateY(0) scale(0.6); opacity: 0; }
+  12% { opacity: 0.9; }
+  100% { transform: translateY(-140px) scale(1); opacity: 0; }
+}
+@keyframes bkd-rain {
+  0% { transform: translateY(-45%); }
+  100% { transform: translateY(145%); }
+}
+@keyframes bkd-lightning {
+  0%, 7%, 11%, 100% { opacity: 0; }
+  3%, 5% { opacity: 0.55; }
+  8%, 9.5% { opacity: 0.3; }
+}
+@keyframes bkd-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.85; }
+  50% { transform: scale(1.08); opacity: 1; }
+}
+@keyframes bkd-scan {
+  0% { transform: translateX(-30%); opacity: 0; }
+  12% { opacity: 0.8; }
+  88% { opacity: 0.8; }
+  100% { transform: translateX(130%); opacity: 0; }
+}
+@keyframes bkd-sway {
+  0%, 100% { transform: rotate(-3deg); }
+  50% { transform: rotate(3deg); }
+}
+
+.bkd-cloud { animation: bkd-drift 46s linear infinite; }
+.bkd-cloud-fast { animation: bkd-drift 30s linear infinite; }
+.bkd-firefly { animation: bkd-firefly 9s ease-out infinite; }
+.bkd-rain { animation: bkd-rain 0.7s linear infinite; }
+.bkd-lightning { animation: bkd-lightning 7s ease infinite; }
+.bkd-pulse { animation: bkd-pulse 5s ease-in-out infinite; }
+.bkd-scan { animation: bkd-scan 6.5s ease-in-out infinite; }
+.bkd-sway { animation: bkd-sway 5.5s ease-in-out infinite; }

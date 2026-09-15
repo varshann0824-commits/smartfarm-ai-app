@@ -1,16 +1,25 @@
 import { PageWrapper } from '@/components/PageWrapper';
 import { useApp, LANGUAGES, type LanguageCode } from '@/context/AppContext';
 import { getNotificationSettings, setNotifications, setAlertSound, requestNotificationPermission, showNotification, playAlertSound } from '@/services/notificationService';
-import { clearLocation } from '@/services/geocodingService';
+import { forwardGeocode, INDIAN_STATES } from '@/services/geocodingService';
 import { OFFICIAL_SOURCES } from '@/services/sourceMetadata';
+import type { LocationInfo } from '@/types';
 import { Globe, MapPin, Mic, Bell, Volume2, FlaskConical, Shield, Database, RotateCcw, ExternalLink } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 export function SettingsPage() {
-  const { t, language, setLanguage, location, detectLocation, isDetectingLocation, demoMode, setDemoMode, setHasOnboarded } = useApp();
+  const { t, language, setLanguage, location, setLocation, detectLocation, isDetectingLocation, demoMode, setDemoMode, setHasOnboarded } = useApp();
   const navigate = useNavigate();
   const [notifSettings, setNotifSettings] = useState(getNotificationSettings());
+  const [showManualForm, setShowManualForm] = useState(false);
+  const [manualCity, setManualCity] = useState('');
+  const [manualDistrict, setManualDistrict] = useState('');
+  const [manualState, setManualState] = useState('');
+  const [manualCountry, setManualCountry] = useState('India');
+  const [manualSaving, setManualSaving] = useState(false);
+  const [manualError, setManualError] = useState<string | null>(null);
+  const [manualSuccess, setManualSuccess] = useState<string | null>(null);
 
   const handleLanguageChange = (code: LanguageCode) => {
     setLanguage(code);
@@ -38,6 +47,68 @@ export function SettingsPage() {
     localStorage.clear();
     setHasOnboarded(false);
     navigate('/onboarding');
+  };
+
+  // Open the in-place manual location form, pre-filled with whatever we
+  // already know so the user only edits what is wrong. This stays entirely
+  // inside Settings — it must never bounce the user back to onboarding.
+  const openManualForm = () => {
+    setManualCity(location.city || '');
+    setManualDistrict(location.district || '');
+    setManualState(location.state || '');
+    setManualCountry(location.country || 'India');
+    setManualError(null);
+    setManualSuccess(null);
+    setShowManualForm(true);
+  };
+
+  const closeManualForm = () => {
+    setShowManualForm(false);
+    setManualError(null);
+  };
+
+  const handleManualSave = async () => {
+    const city = manualCity.trim();
+    const district = manualDistrict.trim();
+    const state = manualState.trim();
+    const country = manualCountry.trim() || 'India';
+
+    if (!city && !district && !state) {
+      setManualSuccess(null);
+      setManualError('Please enter at least a city, district, or state.');
+      return;
+    }
+
+    setManualSaving(true);
+    setManualError(null);
+    setManualSuccess(null);
+
+    // Resolve coordinates so weather, mandi distance, and support lookups
+    // keep working exactly as they do for GPS locations.
+    const query = [city, district, state, country].filter(Boolean).join(', ');
+    const geocoded = await forwardGeocode(query);
+
+    const manualLocation: LocationInfo = {
+      latitude: geocoded?.latitude ?? null,
+      longitude: geocoded?.longitude ?? null,
+      country,
+      state: geocoded?.state || state,
+      district: geocoded?.district || district,
+      city: geocoded?.city || city,
+      village: null,
+      pincode: null,
+      source: 'manual',
+    };
+
+    setLocation(manualLocation);
+    setManualSaving(false);
+
+    const label = [manualLocation.city, manualLocation.district, manualLocation.state].filter(Boolean).join(', ');
+    setManualSuccess(
+      geocoded
+        ? `Location set to ${label}.`
+        : `Location saved as ${label}, but its coordinates could not be verified online. Weather and distance estimates may be limited until you reconnect.`,
+    );
   };
 
   const locationText = [location.city, location.district, location.state].filter(Boolean).join(', ');
@@ -72,10 +143,83 @@ export function SettingsPage() {
           <button onClick={() => detectLocation()} disabled={isDetectingLocation} className="btn btn-primary text-sm flex-1 touch-target">
             {isDetectingLocation ? 'Detecting...' : <>🔄 {t('changeLocation')}</>}
           </button>
-          <button onClick={() => { clearLocation(); navigate('/onboarding'); }} className="btn btn-outline text-sm touch-target">
-            Manual
+          <button
+            onClick={() => (showManualForm ? closeManualForm() : openManualForm())}
+            aria-expanded={showManualForm}
+            aria-controls="manual-location-form"
+            className={`btn text-sm touch-target ${showManualForm ? 'btn-secondary' : 'btn-outline'}`}
+          >
+            <MapPin className="w-4 h-4" /> {showManualForm ? 'Cancel' : 'Manual'}
           </button>
         </div>
+
+        {showManualForm && (
+          <div id="manual-location-form" className="mt-3 rounded-lg border border-stone-200 bg-white p-3 animate-fade-in">
+            <h4 className="font-semibold text-stone-800 text-sm mb-1">Enter Location Manually</h4>
+            <p className="text-xs text-stone-500 mb-3">
+              Use this when GPS is unavailable or inaccurate. Coordinates are looked up from the place you enter, so
+              weather, mandi prices, and nearby support stay accurate.
+            </p>
+
+            <div className="space-y-2">
+              <div>
+                <label htmlFor="manual-city" className="text-xs font-medium text-stone-500 block mb-1">City / Village</label>
+                <input
+                  id="manual-city"
+                  type="text"
+                  value={manualCity}
+                  onChange={e => setManualCity(e.target.value)}
+                  placeholder="e.g., Warangal"
+                  className="input-field"
+                />
+              </div>
+              <div>
+                <label htmlFor="manual-district" className="text-xs font-medium text-stone-500 block mb-1">District</label>
+                <input
+                  id="manual-district"
+                  type="text"
+                  value={manualDistrict}
+                  onChange={e => setManualDistrict(e.target.value)}
+                  placeholder="e.g., Warangal Rural"
+                  className="input-field"
+                />
+              </div>
+              <div>
+                <label htmlFor="manual-state" className="text-xs font-medium text-stone-500 block mb-1">State</label>
+                <select
+                  id="manual-state"
+                  value={manualState}
+                  onChange={e => setManualState(e.target.value)}
+                  className="input-field"
+                >
+                  <option value="">Select state</option>
+                  {INDIAN_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+              <div>
+                <label htmlFor="manual-country" className="text-xs font-medium text-stone-500 block mb-1">Country</label>
+                <input
+                  id="manual-country"
+                  type="text"
+                  value={manualCountry}
+                  onChange={e => setManualCountry(e.target.value)}
+                  placeholder="India"
+                  className="input-field"
+                />
+              </div>
+            </div>
+
+            {manualError && <p className="mt-2 text-xs text-red-600" role="alert">{manualError}</p>}
+            {manualSuccess && <p className="mt-2 text-xs text-green-700" role="status">{manualSuccess}</p>}
+
+            <div className="flex gap-2 mt-3">
+              <button onClick={handleManualSave} disabled={manualSaving} className="btn btn-primary text-sm flex-1 touch-target">
+                {manualSaving ? 'Saving...' : 'Save Location'}
+              </button>
+              <button onClick={closeManualForm} className="btn btn-outline text-sm touch-target">Cancel</button>
+            </div>
+          </div>
+        )}
       </SettingsSection>
 
       {/* Microphone */}

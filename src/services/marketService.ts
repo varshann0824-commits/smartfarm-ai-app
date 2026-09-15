@@ -10,16 +10,66 @@ export interface MarketResult {
 
 const REQUEST_TIMEOUT_MS = 15_000;
 
-// Common Indian crops including spices for manual search
-export const COMMON_CROPS = [
-  'Rice', 'Wheat', 'Cotton', 'Maize', 'Soybean', 'Groundnut',
-  'Onion', 'Tomato', 'Potato', 'Chilli', 'Turmeric', 'Bengal Gram',
-  'Pigeon Pea', 'Black Gram', 'Green Gram', 'Mustard', 'Sunflower',
-  'Sugarcane', 'Banana', 'Mango', 'Grapes', 'Coconut', 'Castor Seed',
-  'Coriander', 'Cumin', 'Fenugreek', 'Fennel', 'Black Pepper',
-  'Cardamom', 'Ginger', 'Garlic', 'Clove', 'Sesame', 'Jowar', 'Bajra',
-  'Ragi', 'Jute', 'Arecanut', 'Coffee', 'Tea',
+// AGMARKNET canonical commodity names (data.gov.in resource
+// 9ef84268-d588-465a-a308-a864a43d0070, field `commodity`).
+// The filter dropdown values must use these EXACT names, because the
+// Supabase `market-prices` Edge Function forwards the selection as an
+// exact server-side `filters[commodity]` match. A friendly label that
+// differs even slightly (e.g. "Rice" vs AGMARKNET's "Paddy") returns
+// zero rows from the API — the missing-results bug this prevents.
+export interface CropOption {
+  /** Exact AGMARKNET commodity name sent to the API. */
+  value: string;
+  /** Friendly label shown in the filter dropdown. */
+  label: string;
+}
+
+export const CROP_OPTIONS: CropOption[] = [
+  { value: 'Paddy', label: 'Paddy / Rice' },
+  { value: 'Wheat', label: 'Wheat' },
+  { value: 'Cotton', label: 'Cotton' },
+  { value: 'Maize', label: 'Maize' },
+  { value: 'Soyabean', label: 'Soybean (Soyabean)' },
+  { value: 'Groundnut', label: 'Groundnut' },
+  { value: 'Onion', label: 'Onion' },
+  { value: 'Tomato', label: 'Tomato' },
+  { value: 'Potato', label: 'Potato' },
+  { value: 'Dry Chillies', label: 'Chilli (Dry Chillies)' },
+  { value: 'Turmeric', label: 'Turmeric' },
+  { value: 'Gram', label: 'Bengal Gram (Gram)' },
+  { value: 'Arhar', label: 'Pigeon Pea (Arhar/Tur)' },
+  { value: 'Urad', label: 'Black Gram (Urad)' },
+  { value: 'Moong', label: 'Green Gram (Moong)' },
+  { value: 'Mustard', label: 'Mustard' },
+  { value: 'Sunflower', label: 'Sunflower' },
+  { value: 'Sugarcane', label: 'Sugarcane' },
+  { value: 'Banana', label: 'Banana' },
+  { value: 'Mango', label: 'Mango' },
+  { value: 'Grapes', label: 'Grapes' },
+  { value: 'Coconut', label: 'Coconut' },
+  { value: 'Castor Seed', label: 'Castor Seed' },
+  { value: 'Coriander', label: 'Coriander (Dhania)' },
+  { value: 'Cummin Seed', label: 'Cumin (Cummin Seed)' },
+  { value: 'Methi', label: 'Fenugreek (Methi)' },
+  { value: 'Saunf', label: 'Fennel (Saunf)' },
+  { value: 'Black pepper', label: 'Black Pepper' },
+  { value: 'Cardamom', label: 'Cardamom' },
+  { value: 'Ginger(Dry)', label: 'Ginger' },
+  { value: 'Garlic', label: 'Garlic' },
+  { value: 'Cloves', label: 'Clove (Cloves)' },
+  { value: 'Sesamum', label: 'Sesame (Sesamum/Til)' },
+  { value: 'Jowar', label: 'Jowar (Sorghum)' },
+  { value: 'Bajra', label: 'Bajra (Pearl Millet)' },
+  { value: 'Ragi', label: 'Ragi (Finger Millet)' },
+  { value: 'Jute', label: 'Jute' },
+  { value: 'Arecanut', label: 'Arecanut' },
+  { value: 'Coffee', label: 'Coffee' },
+  { value: 'Tea', label: 'Tea' },
 ];
+
+// Backwards-compatible list of dropdown values for existing imports
+// (FarmerDetailsPage). Kept in the same order as CROP_OPTIONS.
+export const COMMON_CROPS: string[] = CROP_OPTIONS.map((c) => c.value);
 
 export const COMMON_STATES = [
   'Andhra Pradesh', 'Telangana', 'Maharashtra', 'Karnataka', 'Tamil Nadu',
@@ -29,6 +79,108 @@ export const COMMON_STATES = [
   'Jammu & Kashmir', 'Goa', 'Tripura', 'Manipur', 'Meghalaya',
   'Nagaland', 'Mizoram', 'Arunachal Pradesh', 'Sikkim',
 ];
+
+// Aliases map each AGMARKNET canonical value to spellings /
+// singular-plural / regional variants farmers may type or that older
+// saved filters / demo data may use. Matching is normalised
+// (case-insensitive, punctuation-insensitive), so e.g. "Chilli",
+// "chillies" and "green chilli" all resolve to "Dry Chillies".
+const CROP_ALIASES: Record<string, string[]> = {
+  paddy: ['rice', 'dhan', 'paddy rice', 'common paddy'],
+  wheat: ['wheats'],
+  cotton: ['kapas', 'cottons'],
+  maize: ['corn', 'makka', 'makkai'],
+  soyabean: ['soybean', 'soya', 'soya bean', 'soyabeans', 'soybeans'],
+  groundnut: ['peanut', 'peanuts', 'groundnuts', 'mungfali'],
+  onion: ['onions', 'pyaz', 'kanda'],
+  tomato: ['tomatoes', 'tamatar'],
+  potato: ['potatoes', 'aloo', 'alu'],
+  'dry chillies': ['chilli', 'chillies', 'green chilli', 'red chilli', 'mirchi', 'dry chilli'],
+  turmeric: ['haldi', 'pasupu'],
+  gram: ['bengal gram', 'chana', 'chickpea', 'chick pea', 'gram dal'],
+  arhar: ['pigeon pea', 'tur', 'toor', 'toor dal', 'red gram'],
+  urad: ['black gram', 'blackgram', 'urad dal', 'minapalu'],
+  moong: ['green gram', 'greengram', 'moong dal', 'pesara', 'mung'],
+  mustard: ['mustard seed', 'sarson', 'rai', 'aavaalu'],
+  sunflower: ['sunflower seed', 'sunflowers'],
+  sugarcane: ['sugar cane', 'cane', 'cheruku'],
+  banana: ['bananas', 'plantain', 'arati'],
+  mango: ['mangoes', 'mangos', 'mamidi'],
+  grapes: ['grape', 'draksha'],
+  coconut: ['coconuts', 'copra', 'kobbari', 'nariyal'],
+  'castor seed': ['castor', 'castorseed', 'aamudalu'],
+  coriander: ['dhania', 'dhaniya', 'kottimira', 'coriander seed'],
+  'cummin seed': ['cumin', 'jeera', 'zeera', 'cumin seed', 'cummin'],
+  methi: ['fenugreek', 'methi seeds', 'menthulu'],
+  saunf: ['fennel', 'sopu'],
+  'black pepper': ['pepper', 'blackpepper', 'miriyalu', 'kali mirch'],
+  cardamom: ['elaichi', 'elachi', 'yelakulu'],
+  'ginger(dry)': ['ginger', 'dry ginger', 'adrak', 'allam', 'sonth'],
+  garlic: ['lahsun', 'vellulli'],
+  cloves: ['clove', 'laung', 'lavangalu'],
+  sesamum: ['sesame', 'sesamum seed', 'til', 'gingelly', 'nuvvulu'],
+  jowar: ['sorghum', 'jola', 'jonna', 'cholam'],
+  bajra: ['pearl millet', 'bajri', 'sajja', 'kambu'],
+  ragi: ['finger millet', 'nachni', 'ragulu'],
+  jute: ['jutes'],
+  arecanut: ['areca nut', 'betel nut', 'supari', 'vakkalu'],
+  coffee: ['kaapi'],
+  tea: ['chai'],
+};
+
+/** Normalise a crop/commodity string for tolerant comparison. */
+function normalizeCropName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/\(.*?\)/g, ' ')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** Canonical lookup: AGMARKNET value -> itself, alias -> AGMARKNET value. */
+function canonicalCropKey(name: string): string | null {
+  const norm = normalizeCropName(name);
+  if (!norm) return null;
+  const direct = CROP_OPTIONS.find((o) => normalizeCropName(o.value) === norm);
+  if (direct) return normalizeCropName(direct.value);
+  for (const [canonical, aliases] of Object.entries(CROP_ALIASES)) {
+    if (canonical === norm) return canonical;
+    if (aliases.some((a) => normalizeCropName(a) === norm)) return canonical;
+  }
+  return null;
+}
+
+/**
+ * Resolve any user-typed / legacy / demo crop label to the exact
+ * AGMARKNET canonical commodity value sent to the API.
+ * Unknown values are returned unchanged (server decides).
+ */
+export function resolveCropValue(input: string): string {
+  const key = canonicalCropKey(input);
+  if (!key) return input.trim();
+  return CROP_OPTIONS.find((o) => normalizeCropName(o.value) === key)?.value ?? input.trim();
+}
+
+/**
+ * Client-side match used after records arrive: canonical comparison
+ * first, then a whole-word singular/plural-tolerant substring fallback.
+ */
+export function matchesCropFilter(commodity: string, filterValue: string): boolean {
+  const normCommodity = normalizeCropName(commodity);
+  const normFilter = normalizeCropName(filterValue);
+  if (!normFilter) return true;
+  if (!normCommodity) return false;
+  if (normCommodity === normFilter) return true;
+  const commodityKey = canonicalCropKey(commodity);
+  const filterKey = canonicalCropKey(filterValue);
+  if (commodityKey && filterKey && commodityKey === filterKey) return true;
+  const words = normCommodity.split(' ');
+  if (words.includes(normFilter)) return true;
+  const singular = normFilter.endsWith('s') ? normFilter.slice(0, -1) : `${normFilter}s`;
+  if (words.includes(singular)) return true;
+  return normCommodity.includes(normFilter) || normFilter.includes(normCommodity);
+}
 
 // The data.gov.in AGMARKNET API requires a registered API key.
 // We proxy through a Supabase Edge Function so the key stays server-side.
@@ -48,11 +200,13 @@ export async function fetchMarketPrices(
       throw new Error('Supabase is not configured. The market service requires a Supabase Edge Function to keep the API key server-side.');
     }
 
-    // Call the Supabase Edge Function
+    // Call the Supabase Edge Function. Crop labels are resolved to the
+    // exact AGMARKNET canonical commodity name first so the server-side
+    // exact `filters[commodity]` match succeeds.
     const baseUrl = supabaseUrl.replace(/\/rest\/v1\/?$/, '');
     const params = new URLSearchParams();
     if (state?.trim()) params.append('state', state.trim());
-    if (crop?.trim()) params.append('crop', crop.trim());
+    if (crop?.trim()) params.append('crop', resolveCropValue(crop));
     if (market?.trim()) params.append('market', market.trim());
     const queryString = params.toString();
     const url = `${baseUrl}/functions/v1/market-prices${queryString ? `?${queryString}` : ''}`;
