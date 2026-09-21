@@ -9,7 +9,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 export function SettingsPage() {
-  const { t, language, setLanguage, location, setLocation, detectLocation, isDetectingLocation, demoMode, setDemoMode, setHasOnboarded } = useApp();
+  const { language, setLanguage, location, setLocation, detectLocation, isDetectingLocation, demoMode, setDemoMode, setHasOnboarded } = useApp();
   const navigate = useNavigate();
   const [notifSettings, setNotifSettings] = useState(getNotificationSettings());
   const [showManualForm, setShowManualForm] = useState(false);
@@ -106,15 +106,21 @@ export function SettingsPage() {
     const label = [manualLocation.city, manualLocation.district, manualLocation.state].filter(Boolean).join(', ');
     setManualSuccess(
       geocoded
-        ? `Location set to ${label}.`
-        : `Location saved as ${label}, but its coordinates could not be verified online. Weather and distance estimates may be limited until you reconnect.`,
+        ? `Location set to ${label}. Returning to your dashboard...`
+        : `Location saved as ${label}, but its coordinates could not be verified online. Weather and distance estimates may be limited until you reconnect. Returning to your dashboard...`,
     );
+    // Manual entry stays inside the app flow: confirm briefly, then return to
+    // the dashboard. It must NEVER restart onboarding or wipe farmer data —
+    // setLocation() only touches the location key.
+    window.setTimeout(() => {
+      navigate('/dashboard');
+    }, 1200);
   };
 
   const locationText = [location.city, location.district, location.state].filter(Boolean).join(', ');
 
   return (
-    <PageWrapper title={`\u2699\uFE0F ${t('settings')}`}>
+    <PageWrapper title="Settings">
       {/* Language */}
       <SettingsSection icon={<Globe className="w-5 h-5" />} title="Language">
         <div className="grid grid-cols-1 gap-2">
@@ -136,12 +142,12 @@ export function SettingsPage() {
       {/* Location */}
       <SettingsSection icon={<MapPin className="w-5 h-5" />} title="Location">
         <div className="bg-stone-50 rounded-lg p-3 mb-3">
-          <p className="text-sm text-stone-700">{locationText || 'Location not detected'}</p>
-          <p className="text-xs text-stone-500 mt-1">Source: {location.source}</p>
+          <p className="text-sm text-stone-700 font-medium">{locationText || 'Location not set yet'}</p>
+          <p className="text-xs text-stone-500 mt-1">Source: {location.source === 'manual' ? 'Manual location (set by you — never auto-replaced)' : location.source === 'gps' ? 'GPS location' : 'Not detected yet'}</p>
         </div>
         <div className="flex gap-2">
           <button onClick={() => detectLocation()} disabled={isDetectingLocation} className="btn btn-primary text-sm flex-1 touch-target">
-            {isDetectingLocation ? 'Detecting...' : <>🔄 {t('changeLocation')}</>}
+            {isDetectingLocation ? 'Detecting your location...' : 'Use My Location'}
           </button>
           <button
             onClick={() => (showManualForm ? closeManualForm() : openManualForm())}
@@ -149,7 +155,7 @@ export function SettingsPage() {
             aria-controls="manual-location-form"
             className={`btn text-sm touch-target ${showManualForm ? 'btn-secondary' : 'btn-outline'}`}
           >
-            <MapPin className="w-4 h-4" /> {showManualForm ? 'Cancel' : 'Manual'}
+            <MapPin className="w-4 h-4" /> {showManualForm ? 'Cancel' : 'Enter Location Manually'}
           </button>
         </div>
 
@@ -214,7 +220,7 @@ export function SettingsPage() {
 
             <div className="flex gap-2 mt-3">
               <button onClick={handleManualSave} disabled={manualSaving} className="btn btn-primary text-sm flex-1 touch-target">
-                {manualSaving ? 'Saving...' : 'Save Location'}
+                {manualSaving ? 'Saving...' : 'Save Location & Return to Dashboard'}
               </button>
               <button onClick={closeManualForm} className="btn btn-outline text-sm touch-target">Cancel</button>
             </div>

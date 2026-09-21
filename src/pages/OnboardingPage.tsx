@@ -134,7 +134,8 @@ export function OnboardingPage() {
         {step === 3 && (
           <div className="animate-fade-in">
             <h2 className="text-lg font-semibold text-stone-800 mb-2 text-center">How would you like to start?</h2>
-            <p className="text-stone-600 text-sm mb-6 text-center">Choose an option below</p>
+            <p className="text-stone-600 text-sm mb-1 text-center">You are on the last setup step — pick one option to enter SmartFarm AI.</p>
+            <p className="text-stone-500 text-xs mb-6 text-center">Each option opens a working screen — never a blank page.</p>
 
             <div className="space-y-3">
               <button

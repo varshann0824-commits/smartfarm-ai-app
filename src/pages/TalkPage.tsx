@@ -13,7 +13,9 @@ import { useNavigate } from 'react-router-dom';
 import { VoiceOrb, type VoiceState } from '@/components/voice/VoiceOrb';
 
 // 3D AI core is lazily loaded — visualization only, zero impact on the
-// STT → LLM → TTS pipeline below.
+// STT → LLM → TTS pipeline below. The Suspense fallback keeps the page
+// usable (never blank) while the chunk loads; a failure is caught by the
+// route error boundary in App.tsx.
 const VoiceCore3D = lazy(() => import('@/components/voice/VoiceCore3D'));
 
 
@@ -396,7 +398,7 @@ export function TalkPage() {
           />
           <div className="absolute inset-0 bg-gradient-to-b from-emerald-950/55 via-emerald-950/25 to-[#f8faf8]" />
           <div className="absolute inset-0">
-            <Suspense fallback={null}>
+            <Suspense fallback={<div className="w-full h-full flex items-center justify-center text-emerald-100/70 text-xs">Loading AI visual...</div>}>
               <VoiceCore3D state={voiceState} height={192} />
             </Suspense>
           </div>

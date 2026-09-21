@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
 import type { LocationInfo, FarmerDetails } from '@/types';
-import { loadLocation, saveLocation, getGPSLocation, reverseGeocode, defaultLocation } from '@/services/geocodingService';
+import { loadLocation, saveLocation, getGPSLocationDetailed, reverseGeocode, defaultLocation } from '@/services/geocodingService';
 
 export type LanguageCode = 'en' | 'te' | 'hi' | 'ta' | 'kn' | 'ml' | 'mr';
 
@@ -376,9 +376,47 @@ const FARMER_KEY = 'smartfarm_farmer';
 const ONBOARDED_KEY = 'smartfarm_onboarded';
 const DEMO_KEY = 'smartfarm_demo_mode';
 
+/** Storage access that can NEVER throw during render — private-mode /
+ * blocked-storage failures fall back to memory so the app always renders. */
+const memoryStore = new Map<string, string>();
+
+function safeGet(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return memoryStore.get(key) ?? null;
+  }
+}
+
+function safeSet(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    memoryStore.set(key, value);
+  }
+}
+
+function safeRemove(key: string): void {
+  memoryStore.delete(key);
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    // ignore — memory copy already cleared
+  }
+}
+
+function safeParseFarmer(raw: string | null): FarmerDetails | null {
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as FarmerDetails;
+  } catch {
+    return null;
+  }
+}
+
 export function AppProvider({ children }: { children: ReactNode }) {
   const [language, setLanguageState] = useState<LanguageCode>(() => {
-    const saved = localStorage.getItem(LANGUAGE_KEY) as LanguageCode | null;
+    const saved = safeGet(LANGUAGE_KEY) as LanguageCode | null;
     return saved && LANGUAGES.some(l => l.code === saved) ? saved : 'en';
   });
 
@@ -412,17 +450,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const detectTokenRef = useRef(0);
 
   const [farmerDetails, setFarmerDetailsState] = useState<FarmerDetails | null>(() => {
-    const raw = localStorage.getItem(FARMER_KEY);
-    if (!raw) return null;
-    try { return JSON.parse(raw) as FarmerDetails; } catch { return null; }
+    return safeParseFarmer(safeGet(FARMER_KEY));
   });
 
-  const [demoMode, setDemoModeState] = useState<boolean>(() => localStorage.getItem(DEMO_KEY) === 'true');
-  const [hasOnboarded, setHasOnboardedState] = useState<boolean>(() => localStorage.getItem(ONBOARDED_KEY) === 'true');
+  const [demoMode, setDemoModeState] = useState<boolean>(() => safeGet(DEMO_KEY) === 'true');
+  const [hasOnboarded, setHasOnboardedState] = useState<boolean>(() => safeGet(ONBOARDED_KEY) === 'true');
 
   const setLanguage = useCallback((lang: LanguageCode) => {
     setLanguageState(lang);
-    localStorage.setItem(LANGUAGE_KEY, lang);
+    safeSet(LANGUAGE_KEY, lang);
   }, []);
 
   const t = useCallback((key: string): string => {
@@ -434,6 +470,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // user just chose (GPS or manual), so invalidate its token first.
     detectTokenRef.current += 1;
     setIsDetectingLocation(false);
+    // A valid location now exists, so any earlier "automatic location
+    // unavailable" message is obsolete — leaving it up would contradict the
+    // location the user can see and imply the wrong place is being used.
+    setLocationError(null);
     const withTimestamp: LocationInfo = { ...loc, detectedAt: Date.now() };
     setLocationState(withTimestamp);
     saveLocation(withTimestamp);
@@ -446,17 +486,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setIsDetectingLocation(true);
     setLocationError(null);
     try {
-      const gps = await getGPSLocation();
+      const { coords: gps, failure } = await getGPSLocationDetailed();
       // A newer detectLocation() was started while we were waiting for
       // GPS — discard this stale result so it cannot overwrite fresh data.
       if (thisToken !== detectTokenRef.current) return;
       if (gps) {
-        const geocoded = await reverseGeocode(gps.latitude, gps.longitude);
+        // Round display coordinates to ~5 decimals (≈1 m). Showing 6+
+        // decimals falsely claims sub-meter precision the browser never had.
+        const latitude = Math.round(gps.latitude * 1e5) / 1e5;
+        const longitude = Math.round(gps.longitude * 1e5) / 1e5;
+        const geocoded = await reverseGeocode(latitude, longitude);
         // Guard again after the async reverse-geocode.
         if (thisToken !== detectTokenRef.current) return;
         const newLoc: LocationInfo = {
-          latitude: gps.latitude,
-          longitude: gps.longitude,
+          latitude,
+          longitude,
           country: geocoded.country || 'India',
           state: geocoded.state || '',
           district: geocoded.district || '',
@@ -464,38 +508,64 @@ export function AppProvider({ children }: { children: ReactNode }) {
           village: geocoded.village || null,
           pincode: geocoded.pincode || null,
           source: 'gps',
+          accuracy: gps.accuracy,
         };
-        setLocation(newLoc);
+        // Written directly (NOT via setLocation) on purpose: setLocation
+        // deliberately bumps detectTokenRef to invalidate in-flight GPS reads,
+        // so calling it here would invalidate THIS read. That made the
+        // `finally` guard below always fail, leaving isDetectingLocation stuck
+        // true forever — which permanently disabled every "Use My Location"
+        // button and froze the header on "Detecting your location…", so a
+        // coarse first fix could never be corrected.
+        const withTimestamp: LocationInfo = { ...newLoc, detectedAt: Date.now() };
+        setLocationState(withTimestamp);
+        saveLocation(withTimestamp);
+        setLocationError(null);
       } else {
-        setLocationError('Unable to detect your current location. Please enable location permission or select your location manually.');
+        // Never silently keep/show an unrelated city: clear the stale GPS
+        // text (an explicit manual fix is left untouched) and say exactly
+        // what failed. Storage is read directly so this callback stays
+        // referentially stable (it feeds the mount effect below).
+        if (loadLocation()?.source !== 'manual') {
+          const cleared: LocationInfo = { ...defaultLocation() };
+          setLocationState(cleared);
+          // The clear MUST be persisted too: only updating React state left
+          // the old wrong city in localStorage, so it was restored on every
+          // reload even though GPS had failed.
+          saveLocation(cleared);
+        }
+        setLocationError(
+          failure?.message ||
+            'Automatic location could not be obtained. Please enable location permission or enter your location manually.',
+        );
       }
     } catch {
       if (thisToken !== detectTokenRef.current) return;
-      setLocationError('Unable to detect your current location. Please enable location permission or select your location manually.');
+      setLocationError('Automatic location could not be obtained. Please enable location permission or enter your location manually.');
     } finally {
       if (thisToken === detectTokenRef.current) {
         setIsDetectingLocation(false);
       }
     }
-  }, [setLocation]);
+  }, []);
 
   const setFarmerDetails = useCallback((details: FarmerDetails | null) => {
     setFarmerDetailsState(details);
     if (details) {
-      localStorage.setItem(FARMER_KEY, JSON.stringify(details));
+      safeSet(FARMER_KEY, JSON.stringify(details));
     } else {
-      localStorage.removeItem(FARMER_KEY);
+      safeRemove(FARMER_KEY);
     }
   }, []);
 
   const setDemoMode = useCallback((enabled: boolean) => {
     setDemoModeState(enabled);
-    localStorage.setItem(DEMO_KEY, String(enabled));
+    safeSet(DEMO_KEY, String(enabled));
   }, []);
 
   const setHasOnboarded = useCallback((done: boolean) => {
     setHasOnboardedState(done);
-    localStorage.setItem(ONBOARDED_KEY, String(done));
+    safeSet(ONBOARDED_KEY, String(done));
   }, []);
 
     useEffect(() => {

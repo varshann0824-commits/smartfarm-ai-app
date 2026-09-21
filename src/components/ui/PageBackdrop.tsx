@@ -77,6 +77,8 @@ const ROUTE_VARIANTS: Record<string, BackdropVariant> = {
   '/history': 'farm',
   '/profit': 'market',
   '/farmer-details': 'farm',
+  '/notifications': 'farm',
+  '/profile': 'farm',
 };
 
 export function getBackdropVariant(pathname: string): BackdropVariant | null {

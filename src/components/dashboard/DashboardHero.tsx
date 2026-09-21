@@ -76,7 +76,6 @@ export function DashboardHero({ weather, loading }: { weather: WeatherData | nul
         farmerCrop={farmerDetails?.crop || ''}
         detecting={isDetectingLocation}
         onDetect={() => detectLocation()}
-        detectLabel={t('currentLocation')}
       />
     </motion.section>
   );
@@ -87,7 +86,7 @@ interface HeroContentProps {
   loading: boolean;
   locationText: string;
   locationError: string | null;
-  userLocation: { latitude: number | null; longitude: number | null; source: string };
+  userLocation: { latitude: number | null; longitude: number | null; source: string; accuracy?: number | null };
   season: string;
   today: string;
   reduce: boolean;
@@ -96,12 +95,11 @@ interface HeroContentProps {
   farmerCrop: string;
   detecting: boolean;
   onDetect: () => void;
-  detectLabel: string;
 }
 
 function HeroContent({
   weather, loading, locationText, locationError, userLocation, season, today, reduce,
-  demoMode, farmerName, farmerCrop, detecting, onDetect, detectLabel,
+  demoMode, farmerName, farmerCrop, detecting, onDetect,
 }: HeroContentProps) {
   return (
     <div className="relative p-5 sm:p-7">
@@ -118,17 +116,17 @@ function HeroContent({
         </div>
         <div className="flex items-center gap-2.5">
           <Link
-            to="/settings"
-            aria-label="Notifications and sound settings"
+            to="/notifications"
+            aria-label="Notifications — weather and safety alerts"
             title="Notifications"
             className="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 flex items-center justify-center transition-colors"
           >
             <Bell className="w-[18px] h-[18px] text-white/85" />
           </Link>
           <Link
-            to="/farmer-details"
-            aria-label="Farm and profile information"
-            title="Farm profile"
+            to="/profile"
+            aria-label="Farmer profile and settings"
+            title="Farmer profile"
             className="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 flex items-center justify-center transition-colors"
           >
             <UserRound className="w-[18px] h-[18px] text-white/85" />
@@ -155,29 +153,35 @@ function HeroContent({
           <div className="flex items-center gap-2 mt-2 text-white/70">
             <MapPin className={`w-4 h-4 flex-shrink-0 ${detecting ? 'text-amber-300 animate-pulse' : locationText ? 'text-emerald-300' : 'text-red-300'}`} />
             <span className="truncate max-w-[220px]">
-              {detecting ? 'Detecting your location…' : locationError ? 'Unable to detect location — tap refresh' : locationText || 'Location not detected — tap refresh'}
+              {detecting ? 'Detecting your location…' : locationError ? 'Automatic location unavailable' : locationText || 'Location not set — tap Use My Location'}
             </span>
             <button
               onClick={onDetect}
               disabled={detecting}
               className="inline-flex items-center gap-1 rounded-lg bg-white/10 hover:bg-white/20 px-2 py-1 text-xs font-medium transition-colors disabled:opacity-50 flex-shrink-0"
-              aria-label={detectLabel}
+              aria-label="Use my location"
+              title="Use my location"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${detecting ? 'animate-spin-slow' : ''}`} />
-              {!detecting && <span>Refresh</span>}
+              {!detecting && <span>Use My Location</span>}
             </button>
           </div>
-          {locationError && (
-            <p className="mt-1 text-xs text-red-300 max-w-[280px] leading-snug">
-              {locationError}
+          {locationError ? (
+            <p className="mt-1 text-xs text-red-200 max-w-[280px] leading-snug">
+              {locationError}{' '}
+              <Link to="/settings" className="underline font-semibold text-white">Enter location manually</Link>
             </p>
-          )}
-          {userLocation.latitude && userLocation.longitude && userLocation.source === 'gps' && (
-            <p className="mt-0.5 text-[10px] text-white/40 flex items-center gap-1">
-              <span>Lat: {userLocation.latitude.toFixed(6)}</span>
-              <span>Lng: {userLocation.longitude.toFixed(6)}</span>
+          ) : userLocation.latitude !== null && userLocation.longitude !== null && userLocation.source === 'gps' ? (
+            <p className="mt-0.5 text-[10px] text-white/50 flex items-center gap-1">
+              {userLocation.accuracy !== null && userLocation.accuracy !== undefined && userLocation.accuracy > 1000 ? (
+                <span>Approximate GPS area (+/-{(userLocation.accuracy / 1000).toFixed(1)} km)</span>
+              ) : (
+                <span>GPS: {userLocation.latitude.toFixed(5)}, {userLocation.longitude.toFixed(5)}{userLocation.accuracy ? ` (+/-${userLocation.accuracy} m)` : ''}</span>
+              )}
             </p>
-          )}
+          ) : userLocation.source === 'manual' && locationText ? (
+            <p className="mt-0.5 text-[10px] text-white/50">Manual location — set by you in Settings</p>
+          ) : null}
           <div className="flex flex-wrap items-center gap-2 mt-3">
             <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-medium text-white/80">
               <CalendarDays className="w-3 h-3" />{today}

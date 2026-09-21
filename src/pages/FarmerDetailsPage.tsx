@@ -38,7 +38,7 @@ export function FarmerDetailsPage() {
 
   if (locationStep) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-green-50 to-stone-50 px-6 py-8">
+      <div className="relative z-10 min-h-screen bg-gradient-to-b from-green-50 to-stone-50 px-6 py-8">
         <div className="max-w-md mx-auto">
           <button
             onClick={() => setLocationStep(false)}
@@ -53,7 +53,7 @@ export function FarmerDetailsPage() {
             </div>
             <h1 className="text-2xl font-bold text-stone-800 mb-2">Set Your Location</h1>
             <p className="text-stone-600 text-sm">
-              SmartFarm AI uses your location for weather, market prices, and local recommendations.
+              Step 2 of 2 — your location powers weather, market prices, and local recommendations. Then you reach your dashboard.
             </p>
           </div>
 
@@ -69,9 +69,9 @@ export function FarmerDetailsPage() {
             disabled={isDetectingLocation}
             className="btn btn-primary touch-target w-full text-base mb-3"
           >
-            {isDetectingLocation ? 'Detecting location...' : (
+            {isDetectingLocation ? 'Detecting your location...' : (
               <>
-                <MapPin className="w-5 h-5" /> Detect & Continue
+                <MapPin className="w-5 h-5" /> Use My Location & Continue
               </>
             )}
           </button>
@@ -79,7 +79,7 @@ export function FarmerDetailsPage() {
             onClick={() => navigate('/dashboard')}
             className="btn btn-outline touch-target w-full text-base"
           >
-            Skip for now
+            Skip — Go to Dashboard
           </button>
         </div>
       </div>
@@ -87,7 +87,7 @@ export function FarmerDetailsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-green-50 to-stone-50 px-6 py-8">
+    <div className="relative z-10 min-h-screen bg-gradient-to-b from-green-50 to-stone-50 px-6 py-8">
       <div className="max-w-md mx-auto">
         <button
           onClick={() => navigate(-1)}
@@ -101,7 +101,7 @@ export function FarmerDetailsPage() {
             <Sprout className="w-8 h-8 text-white" />
           </div>
           <h1 className="text-2xl font-bold text-stone-800">Farmer Details</h1>
-          <p className="text-stone-600 text-sm mt-1">Tell us about your farm so we can give better advice.</p>
+          <p className="text-stone-600 text-sm mt-1">Step 1 of 2 - tell us about your farm. Next: confirm your location, then your dashboard.</p>
         </div>
 
         {saved && (
@@ -263,7 +263,7 @@ export function FarmerDetailsPage() {
           {saved ? (
             <><Check className="w-5 h-5" /> Saved</>
           ) : (
-            <>Save & Continue <ArrowRight className="w-5 h-5" /></>
+            <>Save & Continue to Location <ArrowRight className="w-5 h-5" /></>
           )}
         </button>
       </div>

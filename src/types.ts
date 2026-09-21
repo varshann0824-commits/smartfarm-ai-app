@@ -177,6 +177,8 @@ export interface LocationInfo {
   source: 'gps' | 'manual' | 'fallback';
   /** Epoch ms when this location was detected. Used to detect stale data. */
   detectedAt?: number;
+  /** GPS accuracy in meters, when provided by the browser. Used to avoid false precision. */
+  accuracy?: number | null;
 }
 
 export interface FarmerDetails {
