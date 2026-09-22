@@ -1,7 +1,7 @@
 import { PageWrapper } from '@/components/PageWrapper';
 import { DashboardCard } from '@/components/DashboardCard';
 import { useApp } from '@/context/AppContext';
-import { Sprout, FlaskConical, Wallet, Landmark, Building, Settings, CalendarClock, History } from 'lucide-react';
+import { Sprout, FlaskConical, Wallet, Landmark, Building, Settings, CalendarClock, History, Radar } from 'lucide-react';
 
 export function MorePage() {
   const { t } = useApp();
@@ -9,6 +9,7 @@ export function MorePage() {
   return (
     <PageWrapper title={t('more')}>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <DashboardCard to="/field-monitor" icon={<Radar className="w-6 h-6" />} title="Field Monitor" description="Live field health, sensors, crop scans, and irrigation" actionLabel="Open Command Center" accent="teal" />
         <DashboardCard to="/farm-tasks" icon={<CalendarClock className="w-6 h-6" />} title="Farm Tasks" description="Create reminders for irrigation, fertilizer, harvest" actionLabel="Manage Tasks" accent="green" />
         <DashboardCard to="/history" icon={<History className="w-6 h-6" />} title="Analysis History" description="View previous crop health analyses" actionLabel="View History" accent="teal" />
         <DashboardCard to="/crop-recommendation" icon={<Sprout className="w-6 h-6" />} title="Crop Recommendation" description="Find the best crop for your farm" actionLabel={t('getRecommendation')} accent="green" />

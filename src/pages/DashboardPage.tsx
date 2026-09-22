@@ -21,6 +21,7 @@ import { fetchCropAnalyses, type CropAnalysisRecord } from '@/services/analysisH
 
 /** Quick actions shown inside the Talk to SmartFarm AI hero. */
 const QUICK_ACTIONS: { label: string; to: string }[] = [
+  { label: 'Open Field Monitor', to: '/field-monitor' },
   { label: 'Check market prices', to: '/market' },
   { label: 'What should I plant?', to: '/crop-recommendation' },
   { label: 'Is rain expected?', to: '/weather' },

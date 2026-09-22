@@ -25,6 +25,7 @@ import { FarmTasksPage } from '@/pages/FarmTasksPage';
 import { HistoryPage } from '@/pages/HistoryPage';
 import { NotificationsPage } from '@/pages/NotificationsPage';
 import { ProfilePage } from '@/pages/ProfilePage';
+import { FieldMonitorPage } from '@/pages/FieldMonitorPage';
 
 function AppRoutes() {
   const { hasOnboarded } = useApp();
@@ -72,6 +73,7 @@ function AppRoutes() {
           <Route path="/history" element={<RouteErrorBoundary><HistoryPage /></RouteErrorBoundary>} />
           <Route path="/notifications" element={<RouteErrorBoundary><NotificationsPage /></RouteErrorBoundary>} />
           <Route path="/profile" element={<RouteErrorBoundary><ProfilePage /></RouteErrorBoundary>} />
+          <Route path="/field-monitor" element={<RouteErrorBoundary><FieldMonitorPage /></RouteErrorBoundary>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>
