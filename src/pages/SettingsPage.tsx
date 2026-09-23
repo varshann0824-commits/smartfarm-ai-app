@@ -9,7 +9,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 export function SettingsPage() {
-  const { language, setLanguage, location, setLocation, detectLocation, isDetectingLocation, demoMode, setDemoMode, setHasOnboarded } = useApp();
+  const { language, setLanguage, location, setLocation, detectLocation, isDetectingLocation, demoMode, setDemoMode, hasOnboarded, setHasOnboarded } = useApp();
   const navigate = useNavigate();
   const [notifSettings, setNotifSettings] = useState(getNotificationSettings());
   const [showManualForm, setShowManualForm] = useState(false);
@@ -112,6 +112,18 @@ export function SettingsPage() {
     // Manual entry stays inside the app flow: confirm briefly, then return to
     // the dashboard. It must NEVER restart onboarding or wipe farmer data —
     // setLocation() only touches the location key.
+    //
+    // Settings itself is reachable outside the onboarding flow (direct link,
+    // or browser Back after "Reset All Preferences"), while /dashboard is
+    // guarded by the onboarding flag. Saving a location here is an explicit
+    // in-app action, so record that the app flow has been entered before
+    // navigating; otherwise the guard would replace a successful save with the
+    // onboarding screen. This does not weaken onboarding for new users (they
+    // still begin at /onboarding) and it only writes the onboarding flag —
+    // never the location or farmer data.
+    if (!hasOnboarded) {
+      setHasOnboarded(true);
+    }
     window.setTimeout(() => {
       navigate('/dashboard');
     }, 1200);

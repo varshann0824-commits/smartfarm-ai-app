@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, TrendingUp, TrendingDown, Minus, MapPin, CalendarDays, WifiOff } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
-import { fetchMarketPrices, getDemoMarketPrices, type MarketResult } from '@/services/marketService';
+import { fetchMarketPrices, getDemoMarketPrices, formatMarketDate, type MarketResult } from '@/services/marketService';
 import { generateForecast } from '@/services/marketForecastService';
 import { getCropImage } from '@/services/cropImageService';
 import { AnimatedNumber, Sparkline, StaggerItem } from '@/components/ui/motion';
@@ -115,7 +115,7 @@ export function MarketCard({ index }: { index: number }) {
             </div>
             <div className="mt-auto pt-3 flex items-center justify-between text-xs text-ink-400 border-t border-stone-100">
               <span className="inline-flex items-center gap-1">
-                <CalendarDays className="w-3 h-3" />{result.prices[0]?.date}
+                <CalendarDays className="w-3 h-3" />{result.prices[0] ? formatMarketDate(result.prices[0].date) : ''}
               </span>
               <span className="inline-flex items-center gap-1 font-semibold text-brand-700 group-hover:gap-2 transition-all">
                 All prices <ArrowRight className="w-3.5 h-3.5" />

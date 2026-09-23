@@ -18,26 +18,35 @@ export function CropRecommendationPage() {
   const [result, setResult] = useState<RecommendationResult | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [sheetState, setSheetState] = useState<AnalysisState>('idle');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const soilData = loadSoilTest();
 
   const handleRecommend = () => {
     setSheetOpen(true);
     setSheetState('analyzing');
+    setErrorMessage(null);
     setTimeout(() => {
-      const r = getCropRecommendations({
-        state: location.state,
-        district: location.district,
-        season: season as 'auto' | 'kharif' | 'rabi' | 'zaid',
-        waterAvailability: water as 'low' | 'moderate' | 'high',
-        budget: budget as 'low' | 'medium' | 'high',
-        soilType: soilData?.soilType || null,
-        soilPh: soilData?.ph ?? null,
-        cropPreference: cropPreference || null,
-        previousCrop: previousCrop || farmerDetails?.crop || null,
-        hasSoilData: !!soilData,
-      });
-      setResult(r);
-      setSheetState('success');
+      try {
+        const r = getCropRecommendations({
+          state: location.state,
+          district: location.district,
+          season: season as 'auto' | 'kharif' | 'rabi' | 'zaid',
+          waterAvailability: water as 'low' | 'moderate' | 'high',
+          budget: budget as 'low' | 'medium' | 'high',
+          soilType: soilData?.soilType || null,
+          soilPh: soilData?.ph ?? null,
+          cropPreference: cropPreference || null,
+          previousCrop: previousCrop || farmerDetails?.crop || null,
+          hasSoilData: !!soilData,
+        });
+        setResult(r);
+        setSheetState('success');
+      } catch {
+        // Never leave the sheet stuck on "Analyzing..." — reuse the existing
+        // AnalysisSheet error state, which offers the Try Again action.
+        setErrorMessage('Unable to generate crop recommendations right now. Please check your connection and try again.');
+        setSheetState('error');
+      }
     }, 1200);
   };
 
@@ -108,6 +117,8 @@ export function CropRecommendationPage() {
         state={sheetState}
         title="Crop Recommendation Result"
         analyzingLabel="Analyzing best crops for your conditions..."
+        errorLabel={errorMessage || 'Unable to generate crop recommendations right now. Please try again.'}
+        onRetry={handleRecommend}
       >
         {result && (
           <div className="space-y-3 animate-fade-in">

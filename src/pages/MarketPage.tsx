@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { PageWrapper } from '@/components/PageWrapper';
 import { DataBadge, SourceInfo, LoadingSpinner, ErrorState, DemoBanner } from '@/components/DataBadges';
 import { useApp } from '@/context/AppContext';
-import { fetchMarketPrices, getDemoMarketPrices, CROP_OPTIONS, COMMON_STATES, matchesCropFilter, resolveCropValue, type MarketResult } from '@/services/marketService';
+import { fetchMarketPrices, getDemoMarketPrices, CROP_OPTIONS, COMMON_STATES, matchesCropFilter, resolveCropValue, formatMarketDate, type MarketResult } from '@/services/marketService';
 import { generateForecast, type ForecastResult } from '@/services/marketForecastService';
 import { OFFICIAL_SOURCES } from '@/services/sourceMetadata';
 import { getCropImage } from '@/services/cropImageService';
@@ -13,6 +13,22 @@ import { TrendingUp, TrendingDown, Minus, Filter, BarChart3, MapPin, CalendarDay
  * agricultural photo via cropImageService. Images are realistic,
  * high-quality photos. A subtle dark gradient overlay keeps text readable. */
 
+// Shown when the official AGMARKNET feed cannot be reached. Server-side
+// configuration details (API keys, environment variables, secrets) are never
+// surfaced to farmers — the data.gov.in key lives only in the market-prices
+// Supabase Edge Function.
+const MARKET_UNAVAILABLE_MESSAGE =
+  'Live mandi prices are not available right now. The official AGMARKNET price feed could not be reached — please try again in a few minutes. You can also turn on Demo Mode in Settings to see how price cards look with sample data.';
+
+/** Keep server configuration details (keys, environment variables) out of the UI. */
+function safeMarketMessage(message?: string | null): string {
+  if (!message) return MARKET_UNAVAILABLE_MESSAGE;
+  if (/api[\s_-]?key|vite_|secret|token|environment|configured/i.test(message)) {
+    return MARKET_UNAVAILABLE_MESSAGE;
+  }
+  return message;
+}
+
 export function MarketPage() {
   const { t, demoMode } = useApp();
   const [result, setResult] = useState<MarketResult | null>(null);
@@ -22,6 +38,9 @@ export function MarketPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [forecastResult, setForecastResult] = useState<ForecastResult | null>(null);
   const [trendPeriod, setTrendPeriod] = useState<7 | 14 | 30>(7);
+  // The mandi name is committed to `filters` by the Apply Filters button, so a
+  // refetch happens once instead of on every keystroke.
+  const [marketInput, setMarketInput] = useState('');
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -63,7 +82,21 @@ export function MarketPage() {
     ? (CROP_OPTIONS.find(o => o.value === filters.crop)?.label ?? resolveCropValue(filters.crop))
     : '';
 
-  const clearFilters = () => setFilters({ state: '', crop: '', market: '' });
+  const clearFilters = () => {
+    setMarketInput('');
+    setFilters({ state: '', crop: '', market: '' });
+  };
+
+  const applyFilters = () => {
+    const nextMarket = marketInput.trim();
+    if (nextMarket === filters.market) {
+      // Filter unchanged — the effect will not refetch, so refresh explicitly.
+      void loadData();
+      return;
+    }
+    // Committing the value changes `loadData`, so the effect refetches once.
+    setFilters(f => ({ ...f, market: nextMarket }));
+  };
 
   // Trend calculation from filtered prices
   const trendPrices = filteredPrices.length > 0 ? filteredPrices : (result?.prices || []);
@@ -149,15 +182,15 @@ export function MarketPage() {
             <input
               id="market-mandi"
               type="text"
-              value={filters.market}
-              onChange={e => setFilters(f => ({ ...f, market: e.target.value }))}
+              value={marketInput}
+              onChange={e => setMarketInput(e.target.value)}
               placeholder="Search by mandi name..."
               className="input-field"
             />
           </div>
           </div>
           <div className="flex flex-col sm:flex-row gap-2 mt-3">
-            <button onClick={loadData} className="btn btn-primary flex-1 touch-target text-sm">Apply Filters</button>
+            <button onClick={applyFilters} className="btn btn-primary flex-1 touch-target text-sm">Apply Filters</button>
             {hasActiveFilters && (
               <button onClick={clearFilters} className="btn btn-outline touch-target text-sm">
                 <RotateCcw className="w-4 h-4" /> Clear all
@@ -198,7 +231,7 @@ export function MarketPage() {
 
       {!loading && !error && result && result.source.status === 'unavailable' && !demoMode && (
         <ErrorState
-          message={result.message || 'Live market data is currently unavailable. The AGMARKNET/data.gov.in API requires a registered API key (VITE_DATAGOV_API_KEY) to fetch real mandi prices. You can still browse sample data by enabling Demo Mode in Settings.'}
+          message={safeMarketMessage(result.message)}
           onRetry={loadData}
           officialLink={OFFICIAL_SOURCES.AGMARKNET.url}
         />
@@ -311,7 +344,7 @@ function PriceCard({ price, isDemo }: { price: MarketPrice; isDemo: boolean }) {
           <span className="truncate">{price.arrivals ? `Arrivals: ${price.arrivals}` : 'Arrivals: –'}</span>
         </span>
         <span className="inline-flex items-center gap-1 flex-shrink-0">
-          <CalendarDays className="w-3 h-3" aria-hidden="true" />{price.date || '–'}
+          <CalendarDays className="w-3 h-3" aria-hidden="true" />{price.date ? formatMarketDate(price.date) : '–'}
         </span>
       </div>
       <p className="text-[10px] text-stone-400 mt-1.5 pt-1.5 border-t border-stone-100">Price per quintal (₹/qtl) · AGMARKNET</p>
@@ -395,7 +428,7 @@ function TrendSection({ trendData, period, setPeriod }: { trendData: { dates: st
                 style={{ height: `${Math.max(height, 5)}%` }}
                 title={`₹${v}`}
               />
-              <span className="text-[9px] text-stone-400 mt-1 whitespace-nowrap">{trendData.dates[i]?.slice(0, 5) || ''}</span>
+              <span className="text-[9px] text-stone-400 mt-1 whitespace-nowrap">{trendData.dates[i] ? formatMarketDate(trendData.dates[i], 'short') : ''}</span>
             </div>
           );
         })}
@@ -458,7 +491,7 @@ function NearbyMandiComparison({ prices }: { prices: MarketPrice[] }) {
 
   // Sort by modal price descending
   const sorted = mandis.sort((a, b) => (b.modalPrice ?? 0) - (a.modalPrice ?? 0));
-  const nearest = mandis[0]; // first in original order
+  // No distance data is available for these markets, so no mandi is labelled "nearest".
 
   return (
     <div className="card mt-4">
@@ -484,9 +517,9 @@ function NearbyMandiComparison({ prices }: { prices: MarketPrice[] }) {
               </div>
             </div>
             <div className="flex items-center justify-between mt-1 text-[10px] text-stone-400">
-              <span>{m.date}</span>
+              <span>{formatMarketDate(m.date)}</span>
               {i === 0 && <span className="badge badge-live text-[10px]">⭐ Highest modal price</span>}
-              {m.market === nearest.market && i !== 0 && <span className="text-blue-500">Nearest</span>}
+              {/* Distance is not available in this data, so no mandi is marked as "nearest". */}
             </div>
           </div>
         ))}

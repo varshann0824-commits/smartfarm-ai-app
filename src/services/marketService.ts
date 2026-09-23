@@ -237,7 +237,7 @@ export async function fetchMarketPrices(
       maxPrice: parsePrice(readText(record, 'max_price')),
       modalPrice: parsePrice(readText(record, 'modal_price')),
       arrivals: readText(record, 'arrivals') || null,
-      date: readText(record, 'arrival_date'),
+      date: normalizeArrivalDate(readText(record, 'arrival_date')),
     }));
 
     return {
@@ -305,6 +305,79 @@ function parsePrice(val: string): number | null {
   if (!val) return null;
   const n = parseFloat(val.replace(/[^0-9.]/g, ''));
   return isNaN(n) ? null : n;
+}
+
+// ---------------------------------------------------------------------------
+// Date handling for AGMARKNET records
+//
+// `arrival_date` is not guaranteed to be ISO: the feed has returned
+// "2026-09-23", "2026-09-23T00:00:00" and "23/09/2026". Normalising it to
+// `YYYY-MM-DD` makes string sorting (newest-first lists, trend windows and the
+// forecast order) chronological. A value that cannot be parsed safely is kept
+// exactly as the source reported it — nothing is invented and the API payload
+// itself is never modified.
+// ---------------------------------------------------------------------------
+
+const MONTH_NAMES_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function toIsoDate(year: number, month: number, day: number): string | null {
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return null;
+  if (year < 1900 || year > 2200 || month < 1 || month > 12 || day < 1 || day > 31) return null;
+  const check = new Date(Date.UTC(year, month - 1, day));
+  if (
+    check.getUTCFullYear() !== year ||
+    check.getUTCMonth() !== month - 1 ||
+    check.getUTCDate() !== day
+  ) {
+    return null;
+  }
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+/**
+ * Normalise an AGMARKNET arrival date to `YYYY-MM-DD` when it can be parsed
+ * (ISO, ISO-with-time, YYYY/MM/DD, DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY).
+ * Anything else is returned trimmed and unchanged.
+ */
+export function normalizeArrivalDate(raw: string): string {
+  const value = (raw || '').trim();
+  if (!value) return '';
+
+  const iso = /^(\d{4})-(\d{1,2})-(\d{1,2})(?:[T\s].*)?$/.exec(value);
+  if (iso) {
+    const normalised = toIsoDate(Number(iso[1]), Number(iso[2]), Number(iso[3]));
+    if (normalised) return normalised;
+  }
+
+  const yearFirst = /^(\d{4})[/.](\d{1,2})[/.](\d{1,2})$/.exec(value);
+  if (yearFirst) {
+    const normalised = toIsoDate(Number(yearFirst[1]), Number(yearFirst[2]), Number(yearFirst[3]));
+    if (normalised) return normalised;
+  }
+
+  // Indian feed format: day first.
+  const dayFirst = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/.exec(value);
+  if (dayFirst) {
+    const normalised = toIsoDate(Number(dayFirst[3]), Number(dayFirst[2]), Number(dayFirst[1]));
+    if (normalised) return normalised;
+  }
+
+  return value;
+}
+
+/**
+ * Display a market date for farmers: normalised dates read "23 Sep 2026"
+ * ("23 Sep" for compact chart labels); any value that could not be normalised
+ * is shown exactly as the source reported it.
+ */
+export function formatMarketDate(value: string, style: 'short' | 'full' = 'full'): string {
+  const trimmed = (value || '').trim();
+  const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
+  if (!iso) return trimmed;
+  const day = Number(iso[3]);
+  const month = MONTH_NAMES_SHORT[Number(iso[2]) - 1] || '';
+  if (!month) return trimmed;
+  return style === 'short' ? `${day} ${month}` : `${day} ${month} ${iso[1]}`;
 }
 
 // Demo market data - clearly labelled as SAMPLE DATA

@@ -25,6 +25,13 @@ export function WeatherPage() {
         district: location.district,
         state: location.state,
       });
+      if (!r.current) {
+        // The service resolves with no data when both the official source and
+        // the fallback failed. Surface the existing error + Retry state rather
+        // than rendering a weather page with nothing on it.
+        setError(r.notice || 'Live weather information is temporarily unavailable. Please check your connection and try again.');
+        return;
+      }
       setResult(r);
     } catch {
       setError('Live weather information is temporarily unavailable.');
@@ -120,7 +127,7 @@ export function WeatherPage() {
           </div>
 
           {/* 7-Day Forecast */}
-          {result.forecast.length > 0 && (
+          {result.forecast.length > 0 ? (
             <div className="card mb-4">
               <h3 className="font-bold text-stone-800 mb-3 flex items-center gap-2">
                 <Calendar className="w-5 h-5 text-blue-600" /> 7-Day Forecast
@@ -143,6 +150,16 @@ export function WeatherPage() {
                   </div>
                 ))}
               </div>
+            </div>
+          ) : (
+            <div className="mb-4">
+              {/* Forecast data is unavailable — it is never invented, so show the
+                  existing error state with a Retry that reuses the normal fetch flow. */}
+              <ErrorState
+                message={`7-day forecast is not available right now. ${result.source.sourceName} did not return forecast data for your location. Please try again in a few minutes.`}
+                onRetry={loadData}
+                officialLink={OFFICIAL_SOURCES.IMD.url}
+              />
             </div>
           )}
 
