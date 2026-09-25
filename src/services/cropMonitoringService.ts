@@ -96,6 +96,10 @@ export interface CropMonitoringSnapshot {
   analytics: MonitoringAnalytics;
   sourceNote: string;
   unavailable: string[];
+  liveSensorFarmId: string | null;
+  liveSensorDeviceId: string | null;
+  liveSensorFieldId: string | null;
+  lastSensorUpdate: string | null;
 }
 
 export interface CropMonitoringInput {
@@ -354,6 +358,10 @@ export function buildCropMonitoringSnapshot(input: CropMonitoringInput): CropMon
     analytics: { observations7d: buildObservations(input, 7).length, observations30d: observations30d.length, totalObservations: input.analyses.length, pestSignals30d: pestCount, diseaseSignals30d: diseaseCount, healthyObservations30d: healthyCount },
     sourceNote: input.sourceNote ?? 'Weather, saved Crop Health observations, farm tasks, farmer profile, and soil test data.',
     unavailable: input.unavailable ?? [],
+    liveSensorFarmId: input.sensorData?.farmId ?? null,
+    liveSensorDeviceId: input.sensorData?.device?.id ?? null,
+    liveSensorFieldId: input.sensorData?.fieldId ?? null,
+    lastSensorUpdate: input.sensorData?.reading?.recorded_at ?? null,
   };
 }
 

@@ -157,11 +157,10 @@ async function fetchViaEdgeFunction(
   const controller = new AbortController();
   const { signal, done } = withTimeout(controller);
   try {
-    const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
     const res = await fetch(url, {
       signal,
       headers: {
-        ...(anonKey ? { apikey: anonKey } : {}),
+        Accept: 'application/json',
       },
     });
     if (!res.ok) throw new Error(`Weather service responded with ${res.status}.`);

@@ -9,17 +9,21 @@ export function OnboardingPage() {
   const navigate = useNavigate();
   const { language, setLanguage, setHasOnboarded, setDemoMode, detectLocation } = useApp();
   const [step, setStep] = useState(1);
+  const [isProcessingPermissions, setIsProcessingPermissions] = useState(false);
 
   const handleLanguageSelect = (code: LanguageCode) => {
     setLanguage(code);
   };
 
   const handlePermissions = async () => {
-    // Request notification permission (browser will show prompt)
-    await requestNotificationPermission();
-    // Try to detect location
-    await detectLocation();
-    setStep(3);
+    setIsProcessingPermissions(true);
+    try {
+      await requestNotificationPermission();
+      await detectLocation();
+    } finally {
+      setIsProcessingPermissions(false);
+      setStep(3);
+    }
   };
 
   const handleChoice = (choice: 'talk' | 'farmer' | 'demo') => {
@@ -109,16 +113,19 @@ export function OnboardingPage() {
 
             <div className="flex gap-3">
               <button
+                type="button"
                 onClick={() => setStep(1)}
                 className="btn btn-secondary touch-target flex-shrink-0"
               >
                 <ArrowLeft className="w-5 h-5" />
               </button>
               <button
-                onClick={handlePermissions}
-                className="btn btn-primary touch-target flex-1 text-base"
+                type="button"
+                onClick={() => void handlePermissions()}
+                disabled={isProcessingPermissions}
+                className="btn btn-primary touch-target flex-1 text-base disabled:cursor-not-allowed disabled:opacity-70"
               >
-                Allow & Continue <ArrowRight className="w-5 h-5" />
+                {isProcessingPermissions ? 'Processing…' : 'Allow & Continue'} <ArrowRight className="w-5 h-5" />
               </button>
             </div>
             <button
@@ -139,6 +146,15 @@ export function OnboardingPage() {
 
             <div className="space-y-3">
               <button
+                type="button"
+                onClick={() => setStep(2)}
+                className="btn btn-secondary w-full mb-3"
+              >
+                <ArrowLeft className="w-5 h-5" /> Back
+              </button>
+
+              <button
+                type="button"
                 onClick={() => handleChoice('talk')}
                 className="w-full flex items-center gap-4 p-5 rounded-2xl border-2 border-green-200 bg-green-50 hover:border-green-500 transition-all touch-target"
               >

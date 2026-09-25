@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity, BarChart3, Bug, Camera, CloudRain, Droplets, Leaf, RefreshCw,
   ShieldAlert, Sprout, ThermometerSun, WifiOff,
@@ -12,6 +12,7 @@ import {
   loadCropMonitoringSnapshot, RISK_LABEL, type CropMonitoringSnapshot,
   type MonitoringAssessment, type RiskLevel,
 } from '@/services/cropMonitoringService';
+import { subscribeToLiveSensorChanges } from '@/services/sensorIngestionService';
 
 const riskClasses: Record<RiskLevel, string> = {
   unknown: 'bg-stone-100 text-stone-700 border-stone-200',
@@ -76,6 +77,7 @@ export function CropMonitoringPage() {
   const [snapshot, setSnapshot] = useState<CropMonitoringSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const subscriptionRef = useRef<ReturnType<typeof subscribeToLiveSensorChanges> | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -95,6 +97,46 @@ export function CropMonitoringPage() {
   }, [location.latitude, location.longitude, farmerDetails]);
 
   useEffect(() => { void load(); }, [load]);
+
+  useEffect(() => {
+    const farmId = snapshot?.liveSensorFarmId ?? null;
+    const deviceId = snapshot?.liveSensorDeviceId ?? null;
+    const fieldId = snapshot?.liveSensorFieldId ?? null;
+    if (subscriptionRef.current) {
+      subscriptionRef.current.unsubscribe();
+      subscriptionRef.current = null;
+    }
+    if (!farmId) {
+      return undefined;
+    }
+
+    const handleUpdate = () => {
+      void load();
+    };
+
+    try {
+      subscriptionRef.current = subscribeToLiveSensorChanges({
+        farmId,
+        deviceId,
+        fieldId,
+        onChange: handleUpdate,
+      });
+    } catch {
+      subscriptionRef.current = null;
+    }
+
+    const pollingId = window.setInterval(() => {
+      void load();
+    }, 30000);
+
+    return () => {
+      window.clearInterval(pollingId);
+      if (subscriptionRef.current) {
+        subscriptionRef.current.unsubscribe();
+        subscriptionRef.current = null;
+      }
+    };
+  }, [snapshot?.liveSensorFarmId, snapshot?.liveSensorDeviceId, snapshot?.liveSensorFieldId, load]);
 
   const generatedLabel = useMemo(() => {
     if (!snapshot) return 'Preparing…';

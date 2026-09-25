@@ -57,6 +57,10 @@ export interface LiveSensorData {
   reading: SensorReading | null;
 }
 
+export interface LiveSensorSubscriptionHandle {
+  unsubscribe: () => void;
+}
+
 const SENSOR_VALUE_KEYS = [
   'soil_moisture',
   'temperature',
@@ -137,6 +141,54 @@ export async function readLatestLiveSensorData(): Promise<LiveSensorData> {
     fieldId: device.field_id ?? sensorReading?.field_id ?? null,
     device: { id: device.id, status: device.status, last_seen_at: device.last_seen_at },
     reading: sensorReading,
+  };
+}
+
+export function subscribeToLiveSensorChanges(options: {
+  farmId?: string | null;
+  deviceId?: string | null;
+  fieldId?: string | null;
+  onChange: () => void;
+}): LiveSensorSubscriptionHandle | null {
+  const { farmId, deviceId, fieldId, onChange } = options;
+  if (!onChange) return null;
+
+  const filters: string[] = [];
+  if (farmId) filters.push(`farm_id=eq.${farmId}`);
+  if (deviceId) filters.push(`device_id=eq.${deviceId}`);
+  if (fieldId) filters.push(`field_id=eq.${fieldId}`);
+
+  const channel = supabase.channel(`smartfarm-live-sensor-${farmId ?? 'all'}-${Date.now()}`);
+  const readingConfig = {
+    event: '*' as const,
+    schema: 'public',
+    table: 'sensor_readings',
+    ...(filters.length > 0 ? { filter: filters.join(' and ') } : {}),
+  };
+  channel.on('postgres_changes', readingConfig, (payload: { new: Partial<SensorReading>; old: Partial<SensorReading> }) => {
+    const nextRow = (payload.new ?? payload.old ?? payload) as Partial<SensorReading> | null;
+    const source = nextRow?.data_source ?? null;
+    const valid = nextRow?.is_valid ?? true;
+    if (source !== 'development_test' && (source === 'sensor' || valid === true)) {
+      onChange();
+    }
+  });
+
+  if (farmId) {
+    channel.on('postgres_changes', {
+      event: '*' as const,
+      schema: 'public',
+      table: 'devices',
+      filter: `farm_id=eq.${farmId}`,
+    }, () => onChange());
+  }
+
+  channel.subscribe();
+
+  return {
+    unsubscribe: () => {
+      void supabase.removeChannel(channel);
+    },
   };
 }
 
