@@ -7,7 +7,7 @@ import { BackdropScene } from '@/components/ui/PageBackdrop';
 
 export function WelcomePage() {
   const navigate = useNavigate();
-  const { hasOnboarded, t } = useApp();
+  const { hasOnboarded, setHasOnboarded, t } = useApp();
   const reduce = useReducedMotion();
 
   useEffect(() => {
@@ -57,7 +57,10 @@ export function WelcomePage() {
               Get Started <ArrowRight className="w-5 h-5" />
             </motion.button>
             <motion.button
-              onClick={() => navigate('/dashboard')}
+              onClick={() => {
+                setHasOnboarded(true);
+                navigate('/dashboard');
+              }}
               whileTap={{ scale: 0.97 }}
               className="touch-target w-full rounded-2xl border-2 border-white/45 bg-white/15 backdrop-blur-sm text-white font-semibold py-3.5 hover:bg-white/25 transition-colors"
             >

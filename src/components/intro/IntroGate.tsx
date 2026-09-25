@@ -1,5 +1,6 @@
 import { AnimatePresence } from 'framer-motion';
-import { lazy, Suspense, useState, Component, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, useState, Component, type ReactNode } from 'react';
+import { useLocation } from 'react-router-dom';
 import { hasIntroPlayed } from '@/services/introSession';
 
 /**
@@ -20,13 +21,20 @@ type IntroGateProps = {
 };
 
 export function IntroGate({ children }: IntroGateProps) {
+  const { pathname } = useLocation();
   const [showIntro, setShowIntro] = useState(() => !hasIntroPlayed());
+
+  useEffect(() => {
+    if (pathname === '/dashboard') {
+      setShowIntro(false);
+    }
+  }, [pathname]);
 
   return (
     <main data-intro-gate className="w-full">
       {children}
       <AnimatePresence>
-        {showIntro && (
+        {showIntro && pathname !== '/dashboard' && (
           <IntroGuard onFailure={() => setShowIntro(false)}>
             <Suspense fallback={<SkipIntroOverlay onSkip={() => setShowIntro(false)} />}>
               <IntroExperience onComplete={() => setShowIntro(false)} />
