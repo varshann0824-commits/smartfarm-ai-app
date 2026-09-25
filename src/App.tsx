@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AppProvider, useApp } from '@/context/AppContext';
+import { AuthProvider } from '@/context/AuthContext';
 import { IntroGate } from '@/components/intro/IntroGate';
 import { BackdropSwitcher } from '@/components/ui/PageBackdrop';
 import { BottomNav } from '@/components/BottomNav';
@@ -11,6 +12,7 @@ import { DashboardPage } from '@/pages/DashboardPage';
 import { TalkPage } from '@/pages/TalkPage';
 import { MarketPage } from '@/pages/MarketPage';
 import { CropHealthPage } from '@/pages/CropHealthPage';
+import { CropMonitoringPage } from '@/pages/CropMonitoringPage';
 import { SellCropPage } from '@/pages/SellCropPage';
 import { WeatherPage } from '@/pages/WeatherPage';
 import { SafetyPage } from '@/pages/SafetyPage';
@@ -25,6 +27,11 @@ import { FarmTasksPage } from '@/pages/FarmTasksPage';
 import { HistoryPage } from '@/pages/HistoryPage';
 import { NotificationsPage } from '@/pages/NotificationsPage';
 import { ProfilePage } from '@/pages/ProfilePage';
+import { AuthPage } from '@/pages/AuthPage';
+import { DevelopmentSensorTestPage } from '@/pages/DevelopmentSensorTestPage';
+import { DevelopmentFarmSetupPage } from '@/pages/DevelopmentFarmSetupPage';
+import { DevelopmentFieldSetupPage } from '@/pages/DevelopmentFieldSetupPage';
+import { DevelopmentDeviceSetupPage } from '@/pages/DevelopmentDeviceSetupPage';
 
 function AppRoutes() {
   const { hasOnboarded } = useApp();
@@ -52,11 +59,17 @@ function AppRoutes() {
       <div className="relative z-10">
         <Routes>
           <Route path="/" element={<RouteErrorBoundary><WelcomePage /></RouteErrorBoundary>} />
+          <Route path="/auth" element={<RouteErrorBoundary><AuthPage /></RouteErrorBoundary>} />
+          {import.meta.env.DEV && <Route path="/dev/sensor-test" element={<RouteErrorBoundary><DevelopmentSensorTestPage /></RouteErrorBoundary>} />}
+          {import.meta.env.DEV && <Route path="/dev/farm-setup" element={<RouteErrorBoundary><DevelopmentFarmSetupPage /></RouteErrorBoundary>} />}
+          {import.meta.env.DEV && <Route path="/dev/field-setup" element={<RouteErrorBoundary><DevelopmentFieldSetupPage /></RouteErrorBoundary>} />}
+          {import.meta.env.DEV && <Route path="/dev/device-setup" element={<RouteErrorBoundary><DevelopmentDeviceSetupPage /></RouteErrorBoundary>} />}
           <Route path="/onboarding" element={<RouteErrorBoundary><OnboardingPage /></RouteErrorBoundary>} />
           <Route path="/farmer-details" element={<RouteErrorBoundary><FarmerDetailsPage /></RouteErrorBoundary>} />
           <Route path="/dashboard" element={canAccessDashboard ? <RouteErrorBoundary><DashboardPage /></RouteErrorBoundary> : <Navigate to="/onboarding" replace />} />
           <Route path="/talk" element={<RouteErrorBoundary><TalkPage /></RouteErrorBoundary>} />
           <Route path="/market" element={<RouteErrorBoundary><MarketPage /></RouteErrorBoundary>} />
+          <Route path="/crop-monitoring" element={<RouteErrorBoundary><CropMonitoringPage /></RouteErrorBoundary>} />
           <Route path="/crop-health" element={<RouteErrorBoundary><CropHealthPage /></RouteErrorBoundary>} />
           <Route path="/sell-crop" element={<RouteErrorBoundary><SellCropPage /></RouteErrorBoundary>} />
           <Route path="/weather" element={<RouteErrorBoundary><WeatherPage /></RouteErrorBoundary>} />
@@ -84,11 +97,13 @@ function AppRoutes() {
 export default function App() {
   return (
     <BrowserRouter>
-      <AppProvider>
-        <IntroGate>
-          <AppRoutes />
-        </IntroGate>
-      </AppProvider>
+      <AuthProvider>
+        <AppProvider>
+          <IntroGate>
+            <AppRoutes />
+          </IntroGate>
+        </AppProvider>
+      </AuthProvider>
     </BrowserRouter>
   );
 }

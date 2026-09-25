@@ -10,6 +10,7 @@ import { DashboardHero } from '@/components/dashboard/DashboardHero';
 import { WeatherCard } from '@/components/dashboard/WeatherCard';
 import { MarketCard } from '@/components/dashboard/MarketCard';
 import { RecommendationCard } from '@/components/dashboard/RecommendationCard';
+import { CropMonitoringCard } from '@/components/dashboard/CropMonitoringCard';
 import { CropHealthCard } from '@/components/dashboard/CropHealthCard';
 import { SellCropCard } from '@/components/dashboard/SellCropCard';
 import { SafetyCard } from '@/components/dashboard/SafetyCard';
@@ -160,6 +161,8 @@ function DashboardBody({
           ))}
         </div>
       </motion.section>
+
+      <CropMonitoringCard />
 
       {/* Today's Farm Advisor (existing advisor logic, restyled) */}
       <FarmAdvisor weather={weather} weatherLoading={weatherLoading} />
