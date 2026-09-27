@@ -8,7 +8,17 @@ export interface MarketResult {
   message?: string;
 }
 
-const REQUEST_TIMEOUT_MS = 15_000;
+// The market-prices Edge Function time-boxes its own data.gov.in (AGMARKNET)
+// calls and always answers with structured JSON (HTTP 200): either the real
+// records, or an honest "unavailable" status the UI turns into a retryable
+// state. Its ladder is 9s per attempt plus one smaller retry, so its worst
+// case is ~18s. The browser budget must therefore be LARGER than the server's
+// worst case — with both budgets at 15s the browser aborted marginally BEFORE
+// the function could reply, which is what produced the production "request
+// timed out" screen with no explanation. 30s keeps a >10s margin over the
+// function while still cutting off a truly hung connection honestly (never an
+// indefinite wait).
+const REQUEST_TIMEOUT_MS = 30_000;
 
 // AGMARKNET canonical commodity names (data.gov.in resource
 // 9ef84268-d588-465a-a308-a864a43d0070, field `commodity`).
@@ -215,17 +225,37 @@ export async function fetchMarketPrices(
     const res = await fetch(url, {
       signal: controller.signal,
       headers: {
-        // Supabase Edge Functions require the anon key even for public
-        // functions when JWT verification is enabled (the default).
+        // The Supabase API gateway requires the project key on `apikey` —
+        // without it market-prices is never reached (verified live: the
+        // gateway answers 401 "No API key found in request"). Per Supabase's
+        // Edge Function auth model a publishable key on `apikey` ALSO
+        // satisfies the function's platform JWT check (verify_jwt), so no
+        // Authorization header is sent here: `Authorization: Bearer` is
+        // reserved for real user access tokens, and VITE_SUPABASE_ANON_KEY is
+        // a publishable key, not a JWT. Verified against the deployed
+        // function: `apikey` alone returns the function's JSON response.
         ...(anonKey ? { apikey: anonKey } : {}),
       },
     });
     if (!res.ok) {
-      throw new Error(`The market service responded with ${res.status}.`);
+      // 401/403 (auth), 404 (gateway/routing) and 5xx are infrastructure
+      // failures. The HTTP status is developer detail — it never reaches the
+      // farmer-facing UI, which shows its plain-language retryable state.
+      return unavailableMarketResult(`The market service responded with ${res.status}.`);
     }
-    const data: unknown = await res.json();
+    let data: unknown;
+    try {
+      data = await res.json();
+    } catch {
+      return unavailableMarketResult('The market service returned a malformed JSON response.');
+    }
     if (!isMarketResponse(data)) {
-      throw new Error(getMarketApiError(data) || 'The market service returned an unexpected response.');
+      // The function reports machine-readable failure reasons (upstream
+      // timeout / 5xx / configuration). They are developer diagnostics only:
+      // the reason is logged and the farmer-facing message stays plain.
+      const reason = getMarketApiReason(data);
+      const detail = getMarketApiError(data) || 'The market service returned an unexpected response.';
+      return unavailableMarketResult(reason ? `${reason} (${detail})` : detail);
     }
 
     const prices: MarketPrice[] = data.records.filter(isRecord).map((record) => ({
@@ -254,18 +284,30 @@ export async function fetchMarketPrices(
       isDemo: false,
     };
   } catch (error) {
-    const message = error instanceof Error && error.name === 'AbortError'
-      ? 'The market request timed out. Please try again.'
+    const detail = error instanceof Error && error.name === 'AbortError'
+      ? `The market request timed out after ${REQUEST_TIMEOUT_MS / 1000}s.`
       : error instanceof Error
         ? error.message
-        : 'Live market data is temporarily unavailable.';
-    return unavailableMarketResult(message);
+        : 'The market request failed.';
+    return unavailableMarketResult(detail);
   } finally {
     clearTimeout(timeoutId);
   }
 }
 
-function unavailableMarketResult(message: string): MarketResult {
+/**
+ * Honest "unavailable" result for every failure path (no records, no fake
+ * prices, real source metadata with an unavailable status).
+ *
+ * `detail` is DEVELOPER diagnostics only — HTTP statuses, gateway/routing
+ * errors and the Edge Function's structured error text — and is written to
+ * the console. It is deliberately NOT copied into `message`: MarketPage then
+ * shows its existing plain-language, farmer-safe unavailable state (with
+ * Retry and the Demo Mode hint), so no HTTP/status/credential detail can leak
+ * into the UI.
+ */
+function unavailableMarketResult(detail?: string): MarketResult {
+  if (detail) console.debug('[smartfarm] market-prices unavailable:', detail);
   return {
     prices: [],
     source: {
@@ -278,7 +320,6 @@ function unavailableMarketResult(message: string): MarketResult {
       status: 'unavailable',
     },
     isDemo: false,
-    message,
   };
 }
 
@@ -294,6 +335,13 @@ function getMarketApiError(value: unknown): string | null {
   if (!isRecord(value)) return null;
   const error = value.error ?? value.message;
   return typeof error === 'string' && error.trim() ? error.trim() : null;
+}
+
+/** Machine-readable failure reason reported by the Edge Function, if any. */
+function getMarketApiReason(value: unknown): string | null {
+  if (!isRecord(value)) return null;
+  const reason = value.reason;
+  return typeof reason === 'string' && reason.trim() ? reason.trim() : null;
 }
 
 function readText(record: Record<string, unknown>, field: string): string {
