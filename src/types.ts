@@ -15,6 +15,8 @@ export interface MarketPrice {
   market: string;
   state: string;
   district: string;
+  /** AGMARKNET `variety`; absent for records/feeds that do not publish it. */
+  variety?: string | null;
   minPrice: number | null;
   maxPrice: number | null;
   modalPrice: number | null;

@@ -347,7 +347,9 @@ function PriceCard({ price, isDemo }: { price: MarketPrice; isDemo: boolean }) {
           <CalendarDays className="w-3 h-3" aria-hidden="true" />{price.date ? formatMarketDate(price.date) : '–'}
         </span>
       </div>
-      <p className="text-[10px] text-stone-400 mt-1.5 pt-1.5 border-t border-stone-100">Price per quintal (₹/qtl) · AGMARKNET</p>
+      <p className="text-[10px] text-stone-400 mt-1.5 pt-1.5 border-t border-stone-100">
+        {price.variety ? `Variety: ${price.variety} · ` : ''}Price per quintal (₹/qtl) · AGMARKNET
+      </p>
       </div>
     </article>
   );

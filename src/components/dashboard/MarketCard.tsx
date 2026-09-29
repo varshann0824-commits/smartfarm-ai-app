@@ -30,7 +30,10 @@ export function MarketCard({ index }: { index: number }) {
           const demo = getDemoMarketPrices();
           if (!cancelled) setResult(demo);
         } else {
-          const r = await fetchMarketPrices(location.state || undefined);
+          // The dashboard card is a teaser, so it uses a smaller budget than
+          // the Market page: a slow upstream resolves to the honest OFFLINE
+          // state quickly instead of holding up the whole dashboard.
+          const r = await fetchMarketPrices(location.state || undefined, undefined, undefined, { timeoutMs: 20_000 });
           if (!cancelled) setResult(r);
         }
       } catch {

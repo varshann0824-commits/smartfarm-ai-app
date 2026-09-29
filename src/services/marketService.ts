@@ -11,14 +11,14 @@ export interface MarketResult {
 // The market-prices Edge Function time-boxes its own data.gov.in (AGMARKNET)
 // calls and always answers with structured JSON (HTTP 200): either the real
 // records, or an honest "unavailable" status the UI turns into a retryable
-// state. Its ladder is 9s per attempt plus one smaller retry, so its worst
-// case is ~18s. The browser budget must therefore be LARGER than the server's
-// worst case — with both budgets at 15s the browser aborted marginally BEFORE
-// the function could reply, which is what produced the production "request
-// timed out" screen with no explanation. 30s keeps a >10s margin over the
-// function while still cutting off a truly hung connection honestly (never an
-// indefinite wait).
-const REQUEST_TIMEOUT_MS = 30_000;
+// state. Its ladder is a 20s first attempt, a 10s retry, and one final
+// small-page try after fast failures — a worst case of ~30.5s. The browser
+// budget must therefore be LARGER than the server's worst case — with both
+// budgets at 15s the browser aborted marginally BEFORE the function could
+// reply, which is what produced the production "request timed out" screen
+// with no explanation. 45s keeps a >10s margin over the function while still
+// cutting off a truly hung connection honestly (never an indefinite wait).
+const REQUEST_TIMEOUT_MS = 45_000;
 
 // AGMARKNET canonical commodity names (data.gov.in resource
 // 9ef84268-d588-465a-a308-a864a43d0070, field `commodity`).
@@ -196,13 +196,46 @@ export function matchesCropFilter(commodity: string, filterValue: string): boole
 // We proxy through a Supabase Edge Function so the key stays server-side.
 // If the Edge Function is not deployed or the key is not configured,
 // we show "unavailable" honestly.
+export interface MarketFetchOptions {
+  /**
+   * Browser-side abort budget for this request. Defaults to
+   * REQUEST_TIMEOUT_MS, which must stay comfortably above the Edge Function's
+   * own ~30.5s worst case. The dashboard card passes a smaller budget so a
+   * slow upstream resolves to its honest offline state quickly instead of
+   * holding up the dashboard.
+   */
+  timeoutMs?: number;
+}
+
+// Successful live responses are kept in memory for a short window so moving
+// between the dashboard card and the Market page — or re-applying the same
+// filters — does not re-hit data.gov.in, whose gateway is the flakiest part
+// of this feature (every repeated call is a fresh chance to fail). Only
+// genuinely fetched, successful responses are stored: nothing is invented,
+// the cached payload keeps the fetch time it arrived with, and any new
+// filter combination always performs a fresh request.
+const MARKET_CACHE_TTL_MS = 2 * 60 * 1000;
+const marketCache = new Map<string, { result: MarketResult; at: number }>();
+
+function readMarketCache(key: string): MarketResult | null {
+  const hit = marketCache.get(key);
+  if (!hit) return null;
+  if (Date.now() - hit.at > MARKET_CACHE_TTL_MS) {
+    marketCache.delete(key);
+    return null;
+  }
+  return hit.result;
+}
+
 export async function fetchMarketPrices(
   state?: string,
   crop?: string,
   market?: string,
+  options: MarketFetchOptions = {},
 ): Promise<MarketResult> {
+  const timeoutMs = options.timeoutMs && options.timeoutMs > 0 ? options.timeoutMs : REQUEST_TIMEOUT_MS;
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -220,6 +253,12 @@ export async function fetchMarketPrices(
     if (market?.trim()) params.append('market', market.trim());
     const queryString = params.toString();
     const url = `${baseUrl}/functions/v1/market-prices${queryString ? `?${queryString}` : ''}`;
+
+    // Serve an identical recent request from memory instead of asking the
+    // flaky upstream again (see the cache comment above).
+    const cacheKey = `${state?.trim().toLowerCase() ?? ''}|${crop?.trim().toLowerCase() ?? ''}|${market?.trim().toLowerCase() ?? ''}`;
+    const cached = readMarketCache(cacheKey);
+    if (cached) return cached;
 
     const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
     const res = await fetch(url, {
@@ -266,11 +305,12 @@ export async function fetchMarketPrices(
       minPrice: parsePrice(readText(record, 'min_price')),
       maxPrice: parsePrice(readText(record, 'max_price')),
       modalPrice: parsePrice(readText(record, 'modal_price')),
+      variety: readText(record, 'variety') || null,
       arrivals: readText(record, 'arrivals') || null,
       date: normalizeArrivalDate(readText(record, 'arrival_date')),
     }));
 
-    return {
+    const result: MarketResult = {
       prices,
       source: {
         sourceName: OFFICIAL_SOURCES.AGMARKNET.name,
@@ -283,9 +323,11 @@ export async function fetchMarketPrices(
       },
       isDemo: false,
     };
+    marketCache.set(cacheKey, { result, at: Date.now() });
+    return result;
   } catch (error) {
     const detail = error instanceof Error && error.name === 'AbortError'
-      ? `The market request timed out after ${REQUEST_TIMEOUT_MS / 1000}s.`
+      ? `The market request timed out after ${timeoutMs / 1000}s.`
       : error instanceof Error
         ? error.message
         : 'The market request failed.';
