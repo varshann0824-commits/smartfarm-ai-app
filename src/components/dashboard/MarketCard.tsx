@@ -88,7 +88,11 @@ export function MarketCard({ index }: { index: number }) {
         ) : error || !result || rows.length === 0 ? (
           <div className="flex-1 flex flex-col items-start justify-center py-6 text-ink-400">
             <WifiOff className="w-6 h-6 mb-2" />
-            <p className="text-sm">{error ? 'Market data is temporarily unavailable.' : 'No mandi prices found for your area right now.'}</p>
+            <p className="text-sm">
+              {error || !result || result.source.status === 'unavailable'
+                ? 'Live market data is temporarily unavailable.'
+                : 'No mandi prices found for your area right now.'}
+            </p>
           </div>
         ) : (
           <>
